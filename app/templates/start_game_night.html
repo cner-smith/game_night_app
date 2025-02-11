@@ -1,0 +1,28 @@
+<!-- game_night_app/templates/start_game_night.html -->
+
+{% extends "base.html" %}
+
+{% block title %}Start Game Night{% endblock %}
+
+{% block content %}
+    <h1>Start a New Game Night</h1>
+
+    <form action="{{ url_for('game_night.start_game_night') }}" method="POST">
+        <label for="date">Date:</label>
+        <input type="date" name="date" required><br><br>
+
+        <label for="notes">Notes:</label><br>
+        <textarea name="notes" rows="4" cols="50"></textarea><br><br>
+
+        <h3>Attendees:</h3>
+        {% for person in people %}
+            <input type="checkbox" name="attendees" value="{{ person.id }}"> {{ person.first_name }} {{ person.last_name }}<br>
+        {% else %}
+            <p>No people found. <a href="{{ url_for('admin.add_person') }}">Add a person</a></p>
+        {% endfor %}
+        <br>
+        <button type="submit">Start Game Night</button>
+    </form>
+    <br>
+    <a href="{{ url_for('main.index') }}">Back to Home</a>
+{% endblock %}

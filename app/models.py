@@ -1,0 +1,154 @@
+# models.py
+
+#from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import ForeignKey, func
+from sqlalchemy.orm import relationship
+from flask_login import UserMixin
+from app.extensions import db
+
+#db = SQLAlchemy()
+
+class GameNight(db.Model):
+    __tablename__ = 'gamenights'
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.Date, nullable=False)
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=func.current_timestamp())
+    final = db.Column(db.Boolean, default=False)
+    closed = db.Column(db.Boolean, default=False)
+
+    players = relationship('Player', back_populates='game_night', cascade='all, delete-orphan')
+    game_night_games = relationship('GameNightGame', back_populates='game_night', cascade='all, delete-orphan')
+    nominations = db.relationship('GameNominations', back_populates='game_night', cascade='all, delete-orphan')
+    votes = db.relationship('GameVotes', back_populates='game_night', cascade='all, delete-orphan')
+
+class Person(db.Model, UserMixin):
+    __tablename__ = 'people'
+    id = db.Column(db.Integer, primary_key=True)
+    first_name = db.Column(db.String, nullable=False)
+    last_name = db.Column(db.String, nullable=False)
+    email = db.Column(db.String, unique=True, nullable=True)
+    password = db.Column(db.String, nullable=True)
+    created_at = db.Column(db.DateTime, default=func.current_timestamp())
+    temp_pass = db.Column(db.Boolean, default=False)
+    admin = db.Column(db.Boolean, default=False, nullable=False)
+    owner = db.Column(db.Boolean, default=False, nullable=False)
+
+    players = relationship('Player', back_populates='person', cascade='all, delete-orphan')
+    owned_games = relationship('OwnedBy', back_populates='person', cascade='all, delete-orphan')
+    wishlist_items = db.relationship('Wishlist', back_populates='person', cascade='all, delete-orphan')
+
+    @property
+    def is_admin_or_owner(self):
+        return self.admin or self.owner
+
+class Game(db.Model):
+    __tablename__ = 'games'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, nullable=False)
+    bgg_id = db.Column(db.Integer)
+    min_players = db.Column(db.Integer)
+    max_players = db.Column(db.Integer)
+    playtime = db.Column(db.Integer)
+    description = db.Column(db.Text)
+    image_url = db.Column(db.String)
+
+    game_night_games = relationship('GameNightGame', back_populates='game', cascade='all, delete-orphan')
+    owners = relationship('OwnedBy', back_populates='game', cascade='all, delete-orphan')
+    nominations = db.relationship('GameNominations', back_populates='game', cascade='all, delete-orphan')
+    votes = db.relationship('GameVotes', back_populates='game', cascade='all, delete-orphan')
+    wishlist_entries = db.relationship('Wishlist', back_populates='game', cascade='all, delete-orphan')
+
+class OwnedBy(db.Model):
+    __tablename__ = 'ownedby'
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, ForeignKey('games.id'), nullable=False)
+    person_id = db.Column(db.Integer, ForeignKey('people.id'), nullable=False)
+
+    game = relationship('Game', back_populates='owners')
+    person = relationship('Person', back_populates='owned_games')
+
+class Player(db.Model):
+    __tablename__ = 'players'
+    id = db.Column(db.Integer, primary_key=True)
+    game_night_id = db.Column(db.Integer, ForeignKey('gamenights.id'))
+    people_id = db.Column(db.Integer, ForeignKey('people.id'))
+    created_at = db.Column(db.DateTime, default=func.current_timestamp())
+
+    game_night = relationship('GameNight', back_populates='players')
+    person = relationship('Person', back_populates='players')
+    results = relationship('Result', back_populates='player', cascade='all, delete-orphan')
+    nominations = db.relationship('GameNominations', back_populates='player', cascade='all, delete-orphan')
+    votes = db.relationship('GameVotes', back_populates='player', cascade='all, delete-orphan')
+
+class GameNightGame(db.Model):
+    __tablename__ = 'gamenightgames'
+    id = db.Column(db.Integer, primary_key=True)
+    game_night_id = db.Column(db.Integer, ForeignKey('gamenights.id'), nullable=True)
+    game_id = db.Column(db.Integer, ForeignKey('games.id'), nullable=True)
+    round = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=func.current_timestamp())
+
+    game_night = relationship('GameNight', back_populates='game_night_games')
+    game = relationship('Game', back_populates='game_night_games')
+    results = relationship('Result', back_populates='game_night_game', cascade='all, delete-orphan')
+
+class Result(db.Model):
+    __tablename__ = 'results'
+    id = db.Column(db.Integer, primary_key=True)
+    game_night_game_id = db.Column(db.Integer, ForeignKey('gamenightgames.id'), nullable=True)
+    player_id = db.Column(db.Integer, ForeignKey('players.id'), nullable=True)
+    score = db.Column(db.Integer)
+    position = db.Column(db.Integer)
+    created_at = db.Column(db.DateTime, default=func.current_timestamp())
+
+    game_night_game = relationship('GameNightGame', back_populates='results')
+    player = relationship('Player', back_populates='results')
+
+class GameNominations(db.Model):
+    __tablename__ = 'game_nominations'
+
+    id = db.Column(db.Integer, primary_key=True)
+    game_night_id = db.Column(db.Integer, db.ForeignKey('gamenights.id'), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
+    game_id = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=False)
+
+    game_night = db.relationship('GameNight', back_populates='nominations')
+    player = db.relationship('Player', back_populates='nominations')
+    game = db.relationship('Game', back_populates='nominations')
+
+class GameVotes(db.Model):
+    __tablename__ = 'game_votes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    game_night_id = db.Column(db.Integer, db.ForeignKey('gamenights.id'), nullable=False)
+    player_id = db.Column(db.Integer, db.ForeignKey('players.id'), nullable=False)
+    game_id = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=False)
+    rank = db.Column(db.Integer, nullable=False)
+
+    game_night = db.relationship('GameNight', back_populates='votes')
+    player = db.relationship('Player', back_populates='votes')
+    game = db.relationship('Game', back_populates='votes')
+
+class Wishlist(db.Model):
+    __tablename__ = 'wishlist'
+    id = db.Column(db.Integer, primary_key=True)
+    person_id = db.Column(db.Integer, db.ForeignKey('people.id'), nullable=False)
+    game_id = db.Column(db.Integer, db.ForeignKey('games.id'), nullable=False)
+
+    person = db.relationship('Person', back_populates='wishlist_items')
+    game = db.relationship('Game', back_populates='wishlist_entries')
+
+class GamesIndex(db.Model):
+    __tablename__ = "games_index"
+    __table_args__ = {"extend_existing": True}  # Ensures no conflicts
+
+    game_id = db.Column(db.Integer, primary_key=True)
+    game_name = db.Column(db.String, nullable=False)
+    image_url = db.Column(db.String, nullable=True)
+    min_players = db.Column(db.Integer, nullable=False)
+    max_players = db.Column(db.Integer, nullable=False)
+    playtime = db.Column(db.Integer, nullable=True)
+    owner_id = db.Column(db.Integer, db.ForeignKey("people.id"), nullable=True)
+    player_owner = db.Column(db.Boolean, nullable=True)
+    user_owns_game = db.Column(db.Boolean, nullable=False)  # Precomputed boolean

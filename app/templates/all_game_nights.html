@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}All Game Nights{% endblock %}
+
+{% block content %}
+<div class="all-game-nights-container">
+    <h1>All Game Nights</h1>
+
+    <!-- Game Nights List -->
+    <ul class="game-nights">
+        {% for gn in game_nights %}
+            <li>
+                <a href="{{ url_for('game_night.view_game_night', game_night_id=gn.id) }}">
+                    {{ gn.date.strftime('%B %d, %Y') }}
+                </a>
+            </li>
+        {% else %}
+            <li class="no-game-nights">No game nights found.</li>
+        {% endfor %}
+    </ul>
+
+    <!-- Back to Home Button -->
+    <div class="back-to-home">
+        <a href="{{ url_for('main.index') }}" class="button">Back to Home</a>
+    </div>
+</div>
+{% endblock %}

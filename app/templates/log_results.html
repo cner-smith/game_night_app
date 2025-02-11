@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Log Results{% endblock %}
+
+{% block content %}
+    <h1>Log Results for {{ game_night_game.game.name }} (Round {{ game_night_game.round }})</h1>
+
+    <form action="{{ url_for('game_night.log_results', game_night_id=game_night.id, game_night_game_id=game_night_game.id) }}" method="POST">
+        <!-- Styled Table -->
+        <table style="width: 100%; border-collapse: collapse; text-align: center;">
+            <thead>
+                <tr style="background-color: #f2f2f2;">
+                    <th style="border: 1px solid #ddd; padding: 10px;">Player</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">Score</th>
+                    <th style="border: 1px solid #ddd; padding: 10px;">Position</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for player in players %}
+                    <tr style="border-bottom: 1px solid #ddd; transition: background-color 0.3s;">
+                        <td style="border: 1px solid #ddd; padding: 10px;">
+                            {{ player.person.first_name }} {{ player.person.last_name }}
+                        </td>
+                        <td style="border: 1px solid #ddd; padding: 10px;">
+                            <input type="number" name="score_{{ player.id }}" 
+                                   value="{{ existing_results[player.id].score if player.id in existing_results else '' }}" 
+                                   style="width: 100%; padding: 5px;">
+                        </td>
+                        <td style="border: 1px solid #ddd; padding: 10px;">
+                            <input type="number" name="position_{{ player.id }}" 
+                                   value="{{ existing_results[player.id].position if player.id in existing_results else '' }}" 
+                                   min="1" style="width: 100%; padding: 5px;">
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <br>
+
+        <!-- Submit Button -->
+        <div style="text-align: center;">
+            <button type="submit" style="
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                font-size: 16px;
+                cursor: pointer;
+                border-radius: 5px;
+                transition: background-color 0.3s;">
+                Submit Results
+            </button>
+        </div>
+    </form>
+
+    <!-- Back Link -->
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="{{ url_for('game_night.view_game_night', game_night_id=game_night.id) }}" style="
+            color: #007BFF;
+            text-decoration: none;
+            font-weight: bold;">
+            &larr; Back to Game Night
+        </a>
+    </div>
+{% endblock %}
