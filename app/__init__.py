@@ -26,11 +26,11 @@ def create_app():
 
     # Initialize Database
     from app.models import (
-        Person, 
-        UserRecentFutureGameNight, 
-        UserGameNightList,
-        AdminGameNightList, 
-        AdminRecentFutureGameNight
+        Person
+        # ,UserRecentFutureGameNight
+        # ,UserGameNightList
+        # ,AdminGameNightList
+        # ,AdminRecentFutureGameNight
     )
     from sqlalchemy import Table
 
