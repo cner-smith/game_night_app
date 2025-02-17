@@ -1,12 +1,18 @@
 # blueprints/main.py
 
-from flask import Blueprint, render_template, request, current_app
+from flask import Blueprint, render_template, request
 from flask_login import login_required, current_user
-from app.models import db, GameNight, Player
-from datetime import datetime, date, timedelta
+from datetime import datetime, date
 import calendar
 import pytz
-from sqlalchemy import func, text
+from app.services import (
+    get_game_nights,
+    get_all_game_nights, 
+    get_earliest_game_night, 
+    get_recent_and_future_game_nights, 
+    get_calendar_data, 
+    get_navigation_dates
+)
 
 main_bp = Blueprint("main", __name__)
 
@@ -24,69 +30,32 @@ def index():
     year = request.args.get('year', type=int, default=today_central.year)
     month = request.args.get('month', type=int, default=today_central.month)
 
-    # Generate the calendar for the specified month
-    cal = calendar.Calendar(firstweekday=6)  # Start on Sunday
-    month_days = cal.monthdayscalendar(year, month)
-
     # Define start and end dates for the month
     start_date = date(year, month, 1)
-    end_date = start_date + timedelta(days=calendar.monthrange(year, month)[1] - 1)
+    end_date = start_date.replace(day=calendar.monthrange(year, month)[1])
 
-    # Fetch game nights based on user role using SQL views
-    if current_user.owner:
-        # Owners see all game nights
-        query = """
-            SELECT game_night_id, date, notes, final, closed 
-            FROM admin_game_nights_list
-            WHERE date BETWEEN :start_date AND :end_date
-            ORDER BY date ASC
-        """
-        game_nights = db.session.execute(text(query), {"start_date": start_date, "end_date": end_date}).mappings().all()
-    else:
-        # Regular users see only their game nights
-        query = """
-            SELECT game_night_id, date, notes, final, closed 
-            FROM user_game_nights_list
-            WHERE user_id = :user_id
-            AND date BETWEEN :start_date AND :end_date
-            ORDER BY date ASC
-        """
-        game_nights = db.session.execute(
-            text(query), 
-            {"user_id": current_user.id, "start_date": start_date, "end_date": end_date}
-        ).mappings().all()
+    # Fetch game nights
+    game_nights = get_game_nights(current_user, start_date, end_date)
 
-    # Get the earliest game night date from the view
-    earliest_game_night = db.session.scalar(text("SELECT earliest_date FROM public.earliest_game_night"))
+    # Get earliest game night
+    earliest_game_night = get_earliest_game_night()
     earliest_year = earliest_game_night.year if earliest_game_night else today_central.year
 
     # Calculate previous and next months
-    prev_month = (start_date.replace(day=1) - timedelta(days=1)).replace(day=1)
-    if earliest_game_night and prev_month < earliest_game_night.replace(day=1):
-        prev_month = None  # Disable navigation before the earliest game night
-
-    next_month = (start_date.replace(day=28) + timedelta(days=4)).replace(day=1)
+    prev_month, next_month = get_navigation_dates(start_date, earliest_game_night)
 
     # Generate dropdown options
     months = [(i, calendar.month_name[i]) for i in range(1, 13)]
     years = list(range(earliest_year, today_central.year + 11))
 
-    # Fetch recent and future game nights using the optimized view
-    if current_user.owner:
-        query = "SELECT game_night_id, date, notes, final, closed FROM admin_recent_future_game_nights"
-        all_game_nights = db.session.execute(text(query)).fetchall()
-    else:
-        query = """
-            SELECT game_night_id, date, notes, final, closed, user_id FROM user_recent_future_game_nights
-            WHERE user_id = :user_id
-        """
-        all_game_nights = db.session.execute(text(query), {"user_id": current_user.id}).mappings().all()
+    # Fetch recent and future game nights
+    all_game_nights = get_recent_and_future_game_nights(current_user)
 
     # Create context dictionary
     context = {
         "game_nights": game_nights,
-        "game_nights_list": all_game_nights,  # Pass the optimized list
-        "calendar": month_days,
+        "game_nights_list": all_game_nights,
+        "calendar": get_calendar_data(year, month),
         "current_month": start_date,
         "prev_month": prev_month,
         "next_month": next_month,
@@ -101,26 +70,7 @@ def index():
 @login_required
 def all_game_nights():
     """Displays all game nights based on user role."""
-    with db.session.begin():
-        if current_user.owner:
-            query = """
-                SELECT game_night_id, date, notes, final, closed 
-                FROM admin_game_nights_list
-                ORDER BY date DESC
-            """
-            game_nights = db.session.execute(text(query)).mappings().all()
-        else:
-            # Regular users and admins see only game nights they are part of
-            query = """
-                SELECT game_night_id, date 
-                FROM user_game_nights_list
-                WHERE user_id = :user_id
-                ORDER BY date DESC
-            """
-            game_nights = db.session.execute(
-                text(query), 
-                {"user_id": current_user.id}
-            ).mappings().all()
+    game_nights = get_all_game_nights(current_user)
 
     # Create context dictionary
     context = {

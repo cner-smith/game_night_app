@@ -1,7 +1,7 @@
 # app/services/game_night_service.py
 from app.models import db
 from sqlalchemy import text
-from datetime import date, timedelta
+from datetime import timedelta
 import calendar
 
 def get_game_nights(user, start_date, end_date):
