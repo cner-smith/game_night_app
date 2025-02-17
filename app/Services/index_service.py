@@ -4,47 +4,37 @@ from sqlalchemy import text
 from datetime import timedelta
 import calendar
 
-def get_game_nights(user, start_date, end_date):
-    """Fetches game nights based on user role using SQL views."""
-    if user.owner:
-        query = """
-            SELECT game_night_id, date
-            FROM admin_game_nights_list
-            WHERE date BETWEEN :start_date AND :end_date
-            ORDER BY date ASC
-        """
-        return db.session.execute(text(query), {"start_date": start_date, "end_date": end_date}).mappings().all()
-    else:
-        query = """
-            SELECT game_night_id, date 
-            FROM user_game_nights_list
-            WHERE user_id = :user_id
-            AND date BETWEEN :start_date AND :end_date
-            ORDER BY date ASC
-        """
-        return db.session.execute(
-            text(query), 
-            {"user_id": user.id, "start_date": start_date, "end_date": end_date}
-        ).mappings().all()
+def get_game_nights(user, start_date=None, end_date=None):
+    """Fetches game nights based on user role, optionally filtering by date range."""
+    
+    # Determine which SQL view to use
+    table_name = "admin_game_nights_list" if user.owner else "user_game_nights_list"
 
-def get_all_game_nights(user):
-    """Fetches all game nights based on the user's role."""
-    with db.session.begin():
+    # Base query
+    query = f"SELECT game_night_id, date FROM {table_name}"
+
+    # Parameters dictionary
+    params = {}
+
+    # Add filtering by user ID if needed
+    if not user.owner:
+        query += " WHERE user_id = :user_id"
+        params["user_id"] = user.id
+
+    # Add date filtering if start_date and end_date are provided
+    if start_date and end_date:
         if user.owner:
-            query = """
-                SELECT game_night_id, date 
-                FROM admin_game_nights_list
-                ORDER BY date DESC
-            """
-            return db.session.execute(text(query)).mappings().all()
+            query += " WHERE" if "WHERE" not in query else " AND"
         else:
-            query = """
-                SELECT game_night_id, date 
-                FROM user_game_nights_list
-                WHERE user_id = :user_id
-                ORDER BY date DESC
-            """
-            return db.session.execute(text(query), {"user_id": user.id}).mappings().all()
+            query += " AND"
+        query += " date BETWEEN :start_date AND :end_date"
+        params["start_date"] = start_date
+        params["end_date"] = end_date
+
+    # Always order results
+    query += " ORDER BY date DESC" if not start_date else " ORDER BY date ASC"
+
+    return db.session.execute(text(query), params).mappings().all()
         
 def get_earliest_game_night():
     """Retrieves the earliest game night date."""

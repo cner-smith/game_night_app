@@ -7,7 +7,6 @@ import calendar
 import pytz
 from app.services import (
     get_game_nights,
-    get_all_game_nights, 
     get_earliest_game_night, 
     get_recent_and_future_game_nights, 
     get_calendar_data, 
@@ -70,7 +69,7 @@ def index():
 @login_required
 def all_game_nights():
     """Displays all game nights based on user role."""
-    game_nights = get_all_game_nights(current_user)
+    game_nights = get_game_nights(current_user)
 
     # Create context dictionary
     context = {
