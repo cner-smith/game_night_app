@@ -46,12 +46,14 @@
                         <td class="calendar-cell" style="{% if is_today %} background-color: var(--warning-color); {% endif %}">
                             {% if day %}
                                 <div class="calendar-cell-content">
-                                    {% set game_day = game_nights | selectattr("date", "equalto", current_month.replace(day=day)) | list %}
-                                    {% if game_day %}
-                                        <a href="{{ url_for('game_night.view_game_night', game_night_id=game_day.game_night_id) }}">
-                                            <strong>{{ day }}</strong>
-                                            <div class="dice-icon">🎲</div>
-                                        </a>
+                                    {% set game_days = game_nights | selectattr("date", "equalto", current_month.replace(day=day)) | list %}
+                                    {% if game_days %}
+                                        {% for game in game_days %}
+                                            <a href="{{ url_for('game_night.view_game_night', game_night_id=game.game_night_id) }}">
+                                                <strong>{{ day }}</strong>
+                                                <div class="dice-icon">🎲</div>
+                                            </a>
+                                        {% endfor %}
                                     {% else %}
                                         <strong>{{ day }}</strong>
                                     {% endif %}
