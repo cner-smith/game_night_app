@@ -1,12 +1,8 @@
 # blueprints/games.py
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
-from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex
-from app.utils import flash_if_no_action
-from sqlalchemy import func
-from fetch_bgg_data import fetch_game_details, parse_game_details
-from services import games_services
+from app.services import games_services
 
 games_bp = Blueprint("games", __name__)
 
