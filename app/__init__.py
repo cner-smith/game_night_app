@@ -1,9 +1,6 @@
 import logging
 from flask import Flask
 from flask_session import Session
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.cron import CronTrigger
-import pytz
 
 # Import Config & Extensions
 from app.config import Config
@@ -27,29 +24,10 @@ def create_app():
     # Initialize Database
     from app.models import (
         Person
-        # ,UserRecentFutureGameNight
-        # ,UserGameNightList
-        # ,AdminGameNightList
-        # ,AdminRecentFutureGameNight
     )
-    from sqlalchemy import Table
 
     with app.app_context():
         db.create_all()  # Create tables if they don't exist
-
-    #     # Assign SQL views inside the app context
-    #     UserRecentFutureGameNight.__table__ = Table(
-    #         "user_recent_future_game_nights", db.metadata, autoload_with=db.engine
-    #     )
-    #     UserGameNightList.__table__ = Table(
-    #         "user_game_nights_list", db.metadata, autoload_with=db.engine
-    #     )
-    #     AdminGameNightList.__table__ = Table(
-    #         "admin_game_nights_list", db.metadata, autoload_with=db.engine
-    #     )
-    #     AdminRecentFutureGameNight.__table__ = Table(
-    #         "admin_recent_future_game_nights", db.metadata, autoload_with=db.engine
-    #     )
         
     @login_manager.user_loader
     def load_user(user_id):
@@ -67,15 +45,7 @@ def create_app():
     app.register_blueprint(test_bp)
 
     # Scheduler for reminders
-    from app.blueprints.reminders import check_and_send_reminders
-    dallas_timezone = pytz.timezone("America/Chicago")
-    scheduler = BackgroundScheduler()
-    scheduler.add_job(
-        func=check_and_send_reminders,
-        trigger=CronTrigger(hour=10, minute=0, timezone=dallas_timezone),
-        id="daily_game_night_reminder",
-        replace_existing=True
-    )
-    scheduler.start()
+    from app.services.reminders_services import start_scheduler
+    start_scheduler()
 
     return app
