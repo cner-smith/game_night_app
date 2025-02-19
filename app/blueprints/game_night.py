@@ -217,13 +217,19 @@ def remove_game_from_night(game_night_id, game_id):
 @admin_required
 def log_results(game_night_id, game_night_game_id):
     if request.method == "POST":
-        scores_positions = {player_id: (request.form.get(f"score_{player_id}"), request.form.get(f"position_{player_id}")) for player_id in request.form.keys() if player_id.startswith("score_")}
+        # Extract results from the form using the new service function
+        scores_positions = game_night_services.parse_log_results_form(request.form)
+
+        # Call the function to log results
         success, message = game_night_services.log_results(game_night_id, game_night_game_id, scores_positions)
         flash(message, "success" if success else "error")
+
         return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
-    
+
+    # If GET request, load data for rendering
     game_night_game, players, existing_results = game_night_services.get_log_results_data(game_night_game_id)
     return render_template("log_results.html", game_night_id=game_night_id, game_night_game=game_night_game, players=players, existing_results=existing_results)
+
 
 @game_night_bp.route("/game_night/<int:game_night_id>/toggle_results", methods=["POST"])
 @login_required

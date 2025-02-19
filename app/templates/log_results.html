@@ -22,12 +22,13 @@
                             {{ player.person.first_name }} {{ player.person.last_name }}
                         </td>
                         <td style="border: 1px solid #ddd; padding: 10px;">
-                            <input type="number" name="score_{{ player.id }}" 
+                            <input type="hidden" name="results[{{ player.id }}][user_id]" value="{{ player.id }}">
+                            <input type="number" name="results[{{ player.id }}][score]" 
                                    value="{{ existing_results[player.id].score if player.id in existing_results else '' }}" 
                                    style="width: 100%; padding: 5px;">
                         </td>
                         <td style="border: 1px solid #ddd; padding: 10px;">
-                            <input type="number" name="position_{{ player.id }}" 
+                            <input type="number" name="results[{{ player.id }}][position]" 
                                    value="{{ existing_results[player.id].position if player.id in existing_results else '' }}" 
                                    min="1" style="width: 100%; padding: 5px;">
                         </td>
