@@ -6,20 +6,39 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import func, case, and_
 
 
+def parse_date(date_str):
+    """Helper to parse date string into a date object."""
+    try:
+        return datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+def manage_attendees(game_night, attendees_ids):
+    """Helper to sync attendees in a game night."""
+    current_attendees = {p.people_id for p in game_night.players}
+    new_attendees = set(map(int, attendees_ids))
+    
+    # Add new attendees
+    for person_id in new_attendees - current_attendees:
+        db.session.add(Player(game_night_id=game_night.id, people_id=person_id))
+    
+    # Remove attendees who are no longer in the list
+    Player.query.filter(
+        Player.game_night_id == game_night.id, 
+        Player.people_id.notin_(new_attendees)
+    ).delete()
+
 def start_game_night(date_str, notes, attendees_ids):
     """Create a new game night and add attendees."""
-    try:
-        date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
+    date = parse_date(date_str)
+    if not date:
         return False, "Invalid date format. Please use YYYY-MM-DD."
-    
+
     game_night = GameNight(date=date, notes=notes)
     db.session.add(game_night)
     db.session.commit()
     
-    for person_id in attendees_ids:
-        player = Player(game_night_id=game_night.id, people_id=person_id)
-        db.session.add(player)
+    manage_attendees(game_night, attendees_ids)
     db.session.commit()
     
     return True, "Game night started successfully."
@@ -35,47 +54,34 @@ def edit_game_night(game_night_id, date_str, notes, attendees_ids):
     """Edit an existing game night."""
     game_night = GameNight.query.get_or_404(game_night_id)
     
-    try:
-        date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except ValueError:
+    date = parse_date(date_str)
+    if not date:
         return False, "Invalid date format. Please use YYYY-MM-DD."
-    
+
     game_night.date = date
     game_night.notes = notes
-    db.session.commit()
-    
-    current_attendees = {p.people_id for p in game_night.players}
-    new_attendees = set(map(int, attendees_ids))
-    
-    for person_id in new_attendees - current_attendees:
-        db.session.add(Player(game_night_id=game_night.id, people_id=person_id))
-    
-    Player.query.filter(Player.game_night_id == game_night.id, Player.people_id.notin_(new_attendees)).delete()
+    manage_attendees(game_night, attendees_ids)
     
     db.session.commit()
     return True, "Game night updated successfully."
 
-def add_game_to_night(game_night_id, game_id, round_number):
-    """Add a game to a game night."""
-    if not game_id or not round_number:
-        return False, "Please select a game and round number."
+def manage_game_in_night(game_night_id, game_id, action="add", round_number=None):
+    """Add or remove a game from a game night."""
+    if action == "add":
+        if not game_id or not round_number:
+            return False, "Please select a game and round number."
+        
+        game_night_game = GameNightGame(game_night_id=game_night_id, game_id=game_id, round=int(round_number))
+        db.session.add(game_night_game)
     
-    game_night_game = GameNightGame(game_night_id=game_night_id, game_id=game_id, round=int(round_number))
-    db.session.add(game_night_game)
-    db.session.commit()
-    
-    return True, "Game added to game night."
-
-def remove_game_from_night(game_night_id, game_id):
-    """Remove a game from a game night."""
-    game_night_game = GameNightGame.query.filter_by(game_night_id=game_night_id, game_id=game_id).first()
-    
-    if game_night_game:
+    elif action == "remove":
+        game_night_game = GameNightGame.query.filter_by(game_night_id=game_night_id, game_id=game_id).first()
+        if not game_night_game:
+            return False, "Game not found in this game night."
         db.session.delete(game_night_game)
-        db.session.commit()
-        return True, "Game removed from game night."
-    
-    return False, "Game not found in this game night."
+
+    db.session.commit()
+    return True, f"Game {'added' if action == 'add' else 'removed'} successfully."
 
 
 def log_results(game_night_id, game_night_game_id, scores_positions):
@@ -111,19 +117,16 @@ def get_log_results_data(game_night_game_id):
     existing_results = {r.player_id: r for r in game_night_game.results}
     return game_night_game, players, existing_results
 
-def toggle_results(game_night_id):
-    """Toggle the finalization of game night results."""
+def toggle_game_night_field(game_night_id, field):
+    """Toggle boolean fields in a game night (e.g., final results, voting)."""
     game_night = GameNight.query.get_or_404(game_night_id)
-    game_night.final = not game_night.final
-    db.session.commit()
-    return True, "Results have been finalized." if game_night.final else "Results have been reopened."
-
-def toggle_voting(game_night_id):
-    """Toggle voting status for game night."""
-    game_night = GameNight.query.get_or_404(game_night_id)
-    game_night.closed = not game_night.closed
-    db.session.commit()
-    return True, "Voting has been closed." if game_night.closed else "Voting has been reopened."
+    
+    if hasattr(game_night, field):
+        setattr(game_night, field, not getattr(game_night, field))
+        db.session.commit()
+        return True, f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}."
+    
+    return False, "Invalid field."
 
 def determine_top_places(game_night_id):
     """Fetch precomputed rankings for a game night from the database."""
@@ -146,7 +149,7 @@ def determine_top_places(game_night_id):
 
     return sorted(places.items())  # Return as list of tuples (rank, [player_ids])
 
-def get_game_night_details(game_night_id, current_user_id):
+def get_view_game_night_details(game_night_id, current_user_id):
     """Fetch all necessary data for viewing a game night."""
 
     game_night = GameNight.query.get_or_404(game_night_id)

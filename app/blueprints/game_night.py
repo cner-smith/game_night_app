@@ -37,7 +37,7 @@ def start_game_night():
 @game_night_access_required
 def view_game_night(game_night_id):
     """View the details of a specific game night."""
-    context = game_night_services.get_game_night_details(game_night_id, current_user.id)
+    context = game_night_services.get_view_game_night_details(game_night_id, current_user.id)
     return render_template("view_game_night.html", **context)
 
 
@@ -58,7 +58,6 @@ def edit_game_night(game_night_id):
         if success:
             return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
     
-
     context = {
         "game_night": game_night,
         "people": people,
@@ -67,31 +66,17 @@ def edit_game_night(game_night_id):
     return render_template("edit_game_night.html", **context)
 
 
-@game_night_bp.route("/game_night/<int:game_night_id>/add_game", methods=["GET", "POST"])
+@game_night_bp.route("/game_night/<int:game_night_id>/manage_game", methods=["POST"])
 @login_required
 @admin_required
-def add_game_to_night(game_night_id):
-    if request.method == "POST":
-        game_id = request.form.get("game_id")
-        round_number = request.form.get("round")
-        success, message = game_night_services.add_game_to_night(game_night_id, game_id, round_number)
-        flash(message, "success" if success else "error")
-        return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
-    
-    games = game_night_services.get_all_games()
+def manage_game_in_night(game_night_id):
+    action = request.form.get("action")
+    game_id = request.form.get("game_id")
+    round_number = request.form.get("round_number")
 
-    context = {
-        "games": games
-    }
-    return render_template("add_game_to_night.html", **context)
-
-
-@game_night_bp.route("/game_night/<int:game_night_id>/remove_game/<int:game_id>", methods=["POST"])
-@login_required
-@admin_required
-def remove_game_from_night(game_night_id, game_id):
-    success, message = game_night_services.remove_game_from_night(game_night_id, game_id)
+    success, message = game_night_services.manage_game_in_night(game_night_id, game_id, action, round_number)
     flash(message, "success" if success else "error")
+
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
 
@@ -100,18 +85,15 @@ def remove_game_from_night(game_night_id, game_id):
 @admin_required
 def log_results(game_night_id, game_night_game_id):
     if request.method == "POST":
-        data = request.get_json()  # Get JSON data
-
+        data = request.get_json()
         if not data:
             flash("No data received", "error")
             return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
         success, message = game_night_services.log_results(game_night_id, game_night_game_id, data)
-
         flash(message, "success" if success else "error")
         return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
-    # If GET request, show the log results form
     game_night_game, players, existing_results = game_night_services.get_log_results_data(game_night_game_id)
 
     context = {
@@ -123,19 +105,10 @@ def log_results(game_night_id, game_night_game_id):
     return render_template("log_results.html", **context)
 
 
-@game_night_bp.route("/game_night/<int:game_night_id>/toggle_results", methods=["POST"])
+@game_night_bp.route("/game_night/<int:game_night_id>/toggle/<string:field>", methods=["POST"])
 @login_required
 @admin_required
-def toggle_results(game_night_id):
-    success, message = game_night_services.toggle_results(game_night_id)
-    flash(message, "success" if success else "error")
-    return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
-
-
-@game_night_bp.route("/game_night/<int:game_night_id>/toggle_voting", methods=["POST"])
-@login_required
-@admin_required
-def toggle_voting(game_night_id):
-    success, message = game_night_services.toggle_voting(game_night_id)
+def toggle_game_night_field(game_night_id, field):
+    success, message = game_night_services.toggle_game_night_field(game_night_id, field)
     flash(message, "success" if success else "error")
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
