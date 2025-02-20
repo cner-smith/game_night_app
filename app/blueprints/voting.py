@@ -5,13 +5,17 @@ from app.utils import game_night_access_required, flash_if_no_action
 
 voting_bp = Blueprint("voting", __name__)
 
+
 @voting_bp.route("/game_night/<int:game_night_id>/nominate", methods=["POST"])
 @login_required
 @game_night_access_required
 def nominate_game(game_night_id):
     success, message = voting_services.nominate_game(game_night_id, current_user.id, request.form.get("game_id"))
     flash(message, "success" if success else "error")
-    return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
+    
+    context = {"game_night_id": game_night_id}
+    return redirect(url_for("game_night.view_game_night", **context))
+
 
 @voting_bp.route("/game_night/<int:game_night_id>/vote", methods=["POST"])
 @login_required
@@ -32,4 +36,6 @@ def vote_game(game_night_id):
     
     success, message = voting_services.vote_game(game_night_id, current_user.id, votes_dict)
     flash(message, "success" if success else "error")
-    return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
+    
+    context = {"game_night_id": game_night_id}
+    return redirect(url_for("game_night.view_game_night", **context))

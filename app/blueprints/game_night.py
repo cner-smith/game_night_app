@@ -10,6 +10,7 @@ from app.services import game_night_services, admin_services
 
 game_night_bp = Blueprint("game_night", __name__)
 
+
 @game_night_bp.route("/game_night/start", methods=["GET", "POST"])
 @login_required
 @admin_required
@@ -27,7 +28,12 @@ def start_game_night():
             return redirect(url_for("main.index"))
     
     people = admin_services.get_all_people()
-    return render_template("start_game_night.html", people=people)
+
+    context = {
+        "people": people
+    }
+    return render_template("start_game_night.html", **context)
+
 
 @game_night_bp.route("/game_night/<int:game_night_id>")
 @login_required
@@ -158,17 +164,18 @@ def view_game_night(game_night_id):
         ~Game.id.in_({nomination.game_id for nomination, _ in nominations})
     ).order_by(Game.name).all()
 
-    return render_template(
-        "view_game_night.html",
-        game_night=game_night,
-        players=players,
-        game_night_games=game_night_games,
-        nominations=nominations,
-        eligible_games=eligible_games,
-        user_nomination=user_nomination,
-        user_votes=user_votes,
-        top_places=top_places,
-    )
+    context = {
+        "game_night": game_night,
+        "players": players,
+        "game_night_games": game_night_games,
+        "nominations": nominations,
+        "eligible_games": eligible_games,
+        "user_nomination": user_nomination,
+        "user_votes": user_votes,
+        "top_places": top_places
+    }
+    return render_template("view_game_night.html", **context)
+
 
 @game_night_bp.route("/game_night/<int:game_night_id>/edit", methods=["GET", "POST"])
 @login_required
@@ -187,7 +194,14 @@ def edit_game_night(game_night_id):
         if success:
             return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
     
-    return render_template("edit_game_night.html", game_night=game_night, people=people, current_attendees=current_attendees)
+
+    context = {
+        "game_night": game_night,
+        "people": people,
+        "current_attendees": current_attendees
+    }
+    return render_template("edit_game_night.html", **context)
+
 
 @game_night_bp.route("/game_night/<int:game_night_id>/add_game", methods=["GET", "POST"])
 @login_required
@@ -201,7 +215,12 @@ def add_game_to_night(game_night_id):
         return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
     
     games = game_night_services.get_all_games()
-    return render_template("add_game_to_night.html", games=games)
+
+    context = {
+        "games": games
+    }
+    return render_template("add_game_to_night.html", **context)
+
 
 @game_night_bp.route("/game_night/<int:game_night_id>/remove_game/<int:game_id>", methods=["POST"])
 @login_required
@@ -210,6 +229,7 @@ def remove_game_from_night(game_night_id, game_id):
     success, message = game_night_services.remove_game_from_night(game_night_id, game_id)
     flash(message, "success" if success else "error")
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
+
 
 @game_night_bp.route("/game_night/<int:game_night_id>/log_results/<int:game_night_game_id>", methods=["GET", "POST"])
 @login_required
@@ -229,7 +249,14 @@ def log_results(game_night_id, game_night_game_id):
 
     # If GET request, show the log results form
     game_night_game, players, existing_results = game_night_services.get_log_results_data(game_night_game_id)
-    return render_template("log_results.html", game_night_id=game_night_id, game_night_game=game_night_game, players=players, existing_results=existing_results)
+
+    context = {
+        "game_night_id": game_night_id,
+        "game_night_game": game_night_game,
+        "players": players,
+        "existing_results": existing_results
+    }
+    return render_template("log_results.html", **context)
 
 
 @game_night_bp.route("/game_night/<int:game_night_id>/toggle_results", methods=["POST"])
@@ -239,6 +266,7 @@ def toggle_results(game_night_id):
     success, message = game_night_services.toggle_results(game_night_id)
     flash(message, "success" if success else "error")
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
+
 
 @game_night_bp.route("/game_night/<int:game_night_id>/toggle_voting", methods=["POST"])
 @login_required

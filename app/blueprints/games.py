@@ -6,6 +6,7 @@ from app.services import games_services
 
 games_bp = Blueprint("games", __name__)
 
+
 @games_bp.route("/games", methods=["GET"])
 @login_required
 def games_index():
@@ -14,7 +15,12 @@ def games_index():
     playtime_filter = request.args.get("playtime", type=int)
     
     games_with_ownership = games_services.get_filtered_games(current_user.id, name_filter, players_filter, playtime_filter)
-    return render_template("games_index.html", games=games_with_ownership)
+    
+    context = {
+        "games": games_with_ownership
+    }
+    return render_template("games_index.html", **context)
+
 
 @games_bp.route("/game/add", methods=["GET", "POST"])
 @login_required
@@ -28,13 +34,22 @@ def add_game():
         
         return redirect(url_for("games.add_game"))
     
-    return render_template("add_game.html")
+    context = {}
+    return render_template("add_game.html", **context)
+
 
 @games_bp.route("/game/<int:game_id>")
 @login_required
 def view_game(game_id):
     game, leaderboard, game_nights = games_services.get_game_details(game_id)
-    return render_template("view_game.html", game=game, leaderboard=leaderboard, game_nights=game_nights)
+    
+    context = {
+        "game": game,
+        "leaderboard": leaderboard,
+        "game_nights": game_nights
+    }
+    return render_template("view_game.html", **context)
+
 
 @games_bp.route("/game/<int:game_id>/claim", methods=["POST"])
 @login_required
@@ -45,6 +60,7 @@ def claim_game(game_id):
     flash(message, "success" if success else "error")
     return redirect(url_for("games.games_index"))
 
+
 @games_bp.route("/game/<int:game_id>/remove_ownership", methods=["POST"])
 @login_required
 def remove_ownership(game_id):
@@ -52,11 +68,17 @@ def remove_ownership(game_id):
     flash(message, "success" if success else "error")
     return redirect(url_for("games.games_index"))
 
+
 @games_bp.route("/wishlist", methods=["GET"])
 @login_required
 def wishlist():
     wishlist_games = games_services.get_wishlist(current_user.id)
-    return render_template("wishlist.html", games=wishlist_games)
+    
+    context = {
+        "games": wishlist_games
+    }
+    return render_template("wishlist.html", **context)
+
 
 @games_bp.route("/wishlist/add", methods=["GET", "POST"])
 @login_required
@@ -70,7 +92,9 @@ def add_to_wishlist():
         
         return redirect(url_for("games.wishlist"))
     
-    return render_template("add_to_wishlist.html")
+    context = {}
+    return render_template("add_to_wishlist.html", **context)
+
 
 @games_bp.route("/wishlist/remove/<int:game_id>", methods=["POST"])
 @login_required

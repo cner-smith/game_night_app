@@ -10,6 +10,7 @@ from app.extensions import db
 
 auth_bp = Blueprint("auth", __name__)
 
+
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
@@ -27,7 +28,9 @@ def login():
         else:
             flash(message, "error")
     
-    return render_template("login.html")
+    context = {}
+    return render_template("login.html", **context)
+
 
 @auth_bp.route("/logout", methods=["POST"])
 @login_required
@@ -35,6 +38,7 @@ def logout():
     logout_user()
     flash("You have been logged out.", "success")
     return redirect(url_for("auth.login"))
+
 
 @auth_bp.route("/signup", methods=["GET", "POST"])
 @flash_if_no_action("Please provide all required fields to sign up.", "error")
@@ -51,7 +55,9 @@ def signup():
         if success:
             return redirect(url_for("auth.login"))
     
-    return render_template("signup.html")
+    context = {}
+    return render_template("signup.html", **context)
+
 
 @auth_bp.route("/forgot_password", methods=["GET", "POST"])
 @flash_if_no_action("Please enter your email address to reset your password.", "error")
@@ -64,7 +70,9 @@ def forgot_password():
         if success:
             return redirect(url_for("auth.login"))
     
-    return render_template("forgot_password.html")
+    context = {}
+    return render_template("forgot_password.html", **context)
+
 
 @auth_bp.route("/update_password", methods=["GET", "POST"])
 @login_required
@@ -80,7 +88,9 @@ def update_password():
         if success:
             return redirect(url_for("main.index"))
     
-    return render_template("update_password.html")
+    context = {}
+    return render_template("update_password.html", **context)
+
 
 @auth_bp.route("/manage_user", methods=["GET", "POST"])
 @login_required
@@ -173,4 +183,8 @@ def manage_user():
         "most_wins_stats": most_wins_stats
     }
 
-    return render_template("manage_user.html", person=user, stats=stats)
+    context = {
+        "person": user,
+        "stats": stats
+    }
+    return render_template("manage_user.html", **context)

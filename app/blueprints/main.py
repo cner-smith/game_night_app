@@ -9,10 +9,10 @@ from app.services import index_services
 
 main_bp = Blueprint("main", __name__)
 
+
 @main_bp.route("/")
 @login_required
 def index():
-    #test 1
     """Homepage with a calendar of game nights using SQL views."""
     
     # Define Central Time Zone
@@ -56,8 +56,8 @@ def index():
         "months": months,
         "years": years
     }
-
     return render_template('index.html', **context)
+
 
 @main_bp.route("/game_nights/all")
 @login_required
@@ -69,5 +69,4 @@ def all_game_nights():
     context = {
         "game_nights": game_nights
     }
-
     return render_template('all_game_nights.html', **context)
