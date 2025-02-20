@@ -7,7 +7,6 @@ from app.utils import admin_required, game_night_access_required, flash_if_no_ac
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, and_, case
 from app.services import game_night_services, admin_services
-import json
 
 game_night_bp = Blueprint("game_night", __name__)
 
