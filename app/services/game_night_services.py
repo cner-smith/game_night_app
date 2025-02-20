@@ -1,7 +1,10 @@
-from app.models import db, GameNight, Player, GameNightGame, Result, Game, GameNightRankings
+from app.models import db, GameNight, Player, GameNightGame, Result, Game, GameNightRankings, GameNominations, GameVotes, OwnedBy
 from datetime import datetime
 from app.services.admin_services import get_all_people
 from collections import defaultdict
+from sqlalchemy.orm import joinedload
+from sqlalchemy.sql import func, case, and_
+
 
 def start_game_night(date_str, notes, attendees_ids):
     """Create a new game night and add attendees."""
@@ -143,3 +146,140 @@ def determine_top_places(game_night_id):
 
     return sorted(places.items())  # Return as list of tuples (rank, [player_ids])
 
+def get_game_night_details(game_night_id, current_user_id):
+    """Fetch all necessary data for viewing a game night."""
+
+    game_night = GameNight.query.get_or_404(game_night_id)
+
+    # Fetch and sort players alphabetically
+    players = sorted(
+        Player.query.filter_by(game_night_id=game_night.id)
+        .options(joinedload(Player.person))
+        .all(),
+        key=lambda p: (p.person.last_name, p.person.first_name)
+    )
+
+    # Fetch game night games with results
+    game_night_games = (
+        GameNightGame.query
+        .filter_by(game_night_id=game_night.id)
+        .options(joinedload(GameNightGame.results).joinedload(Result.player).joinedload(Player.person))
+        .all()
+    )
+
+    # Sort results by position and score
+    for game_night_game in game_night_games:
+        game_night_game.results.sort(key=lambda r: (r.position, -(r.score or 0)))
+
+    # Check if results are logged for any games
+    results_logged = db.session.query(Result).filter(
+        Result.game_night_game_id.in_([gng.id for gng in game_night.game_night_games])
+    ).first() if game_night.game_night_games else None
+
+    # Fetch the current user's player record for this game night
+    current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=current_user_id).first()
+
+    # Fetch the user's game nomination
+    user_nomination = None
+    if current_player:
+        user_nomination = GameNominations.query.filter_by(
+            game_night_id=game_night_id,
+            player_id=current_player.id
+        ).first()
+
+    # Fetch the user's votes
+    user_votes = {}
+    if current_player:
+        user_votes_query = GameVotes.query.filter_by(
+            game_night_id=game_night_id,
+            player_id=current_player.id
+        ).all()
+        user_votes = {vote.game_id: vote.rank for vote in user_votes_query}
+
+    # Query nominations with vote scores
+    nominations_query = db.session.query(
+        GameNominations,
+        func.sum(
+            case(
+                (GameVotes.rank == 1, 3),
+                (GameVotes.rank == 2, 2),
+                (GameVotes.rank == 3, 1),
+                else_=0
+            )
+        ).label('vote_score')
+    ).outerjoin(
+        GameVotes,
+        and_(
+            GameNominations.game_id == GameVotes.game_id,
+            GameVotes.game_night_id == game_night_id
+        )
+    ).filter(
+        GameNominations.game_night_id == game_night_id
+    ).group_by(
+        GameNominations.id,
+        GameNominations.game_night_id,
+        GameNominations.player_id,
+        GameNominations.game_id
+    ).all()
+
+    # Query games that have votes but no nominations
+    games_with_votes_query = db.session.query(
+        GameVotes.game_id,
+        func.sum(
+            case(
+                (GameVotes.rank == 1, 3),
+                (GameVotes.rank == 2, 2),
+                (GameVotes.rank == 3, 1),
+                else_=0
+            )
+        ).label('vote_score')
+    ).filter(
+        GameVotes.game_night_id == game_night_id
+    ).group_by(
+        GameVotes.game_id
+    ).all()
+
+    # Merge nominations and games with votes, avoiding duplicates
+    nominations_dict = {n.game_id: (n, score) for n, score in nominations_query}
+    for game_id, vote_score in games_with_votes_query:
+        if game_id not in nominations_dict:
+            game = db.session.query(Game).filter_by(id=game_id).first()
+            dummy_nomination = GameNominations(game_night_id=game_night_id, game=game)
+            nominations_dict[game_id] = (dummy_nomination, vote_score)
+
+    # Sort nominations by vote score (descending), then game name (alphabetically)
+    nominations = sorted(
+        nominations_dict.values(),
+        key=lambda x: (-x[1], x[0].game.name)
+    )
+
+    # Determine top places if results are logged
+    top_places = None
+    if results_logged:
+        raw_places = determine_top_places(game_night_id)
+        top_places = [
+            (place, [Player.query.get(player_id) for player_id in players if Player.query.get(player_id) is not None])
+            for place, players in raw_places if players
+        ][:3]
+
+    # Get eligible games for nomination
+    eligible_games = db.session.query(Game).join(
+        OwnedBy, Game.id == OwnedBy.game_id
+    ).filter(
+        db.or_(
+            OwnedBy.person_id == current_user_id,
+            OwnedBy.person_id.in_([player.people_id for player in players])
+        ),
+        ~Game.id.in_({nomination.game_id for nomination, _ in nominations})
+    ).order_by(Game.name).all()
+
+    return {
+        "game_night": game_night,
+        "players": players,
+        "game_night_games": game_night_games,
+        "nominations": nominations,
+        "eligible_games": eligible_games,
+        "user_nomination": user_nomination,
+        "user_votes": user_votes,
+        "top_places": top_places
+    }
