@@ -223,7 +223,7 @@ def log_results(game_night_id, game_night_game_id):
 
     success, message = game_night_services.log_results(game_night_id, game_night_game_id, data)
     
-    return {"message": message}, (200 if success else 400)  # Flask converts dict to JSON automatically
+    return {"message": message}, (200 if success else 400)  # Flask converts dict to JSON automatically (Test)
 
 
 @game_night_bp.route("/game_night/<int:game_night_id>/toggle_results", methods=["POST"])
