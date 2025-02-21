@@ -105,14 +105,6 @@ def log_results(game_night_id, game_night_game_id):
     return render_template("log_results.html", **context)
 
 
-@game_night_bp.route("/game_night/<int:game_night_id>/toggle/<string:field>", methods=["POST"])
-@login_required
-@admin_required
-def toggle_game_night_field(game_night_id, field):
-    success, message = game_night_services.toggle_game_night_field(game_night_id, field)
-    flash(message, "success" if success else "error")
-    return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
-
 @game_night_bp.route("/game_night/<int:game_night_id>/add_game", methods=["GET"])
 @login_required
 @admin_required
@@ -121,8 +113,16 @@ def add_game_to_night(game_night_id):
     game_night = game_night_services.get_game_night_by_id(game_night_id)  # Fetch the game night
     games = game_night_services.get_all_games()  # Fetch all available games
 
+    # Capture filters from request args (if any)
+    filters = {
+        "name": request.args.get("name", ""),
+        "players": request.args.get("players", ""),
+        "playtime": request.args.get("playtime", "")
+    }
+
     context = {
         "game_night": game_night,
-        "games": games
+        "games": games,
+        "filters": filters  # Ensure filters exist
     }
     return render_template("add_game_to_night.html", **context)
