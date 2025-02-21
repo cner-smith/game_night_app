@@ -140,3 +140,4 @@ def add_game_to_night(game_night_id):
         },
     }
     return render_template("add_game_to_night.html", **context)
+
