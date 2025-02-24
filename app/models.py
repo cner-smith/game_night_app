@@ -50,6 +50,7 @@ class Game(db.Model):
     playtime = db.Column(db.Integer)
     description = db.Column(db.Text)
     image_url = db.Column(db.String)
+    tutorial_url = db.Column(db.String)
 
     game_night_games = relationship('GameNightGame', back_populates='game', cascade='all, delete-orphan')
     owners = relationship('OwnedBy', back_populates='game', cascade='all, delete-orphan')
@@ -62,6 +63,16 @@ class OwnedBy(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, ForeignKey('games.id'), nullable=False)
     person_id = db.Column(db.Integer, ForeignKey('people.id'), nullable=False)
+
+    game = relationship('Game', back_populates='owners')
+    person = relationship('Person', back_populates='owned_games')
+
+class GameRankings(db.Model):
+    __tablename__ = 'game_rankings'
+    id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, ForeignKey('games.id'), nullable=False)
+    person_id = db.Column(db.Integer, ForeignKey('people.id'), nullable=False)
+    ranking = db.Column(db.Integer)
 
     game = relationship('Game', back_populates='owners')
     person = relationship('Person', back_populates='owned_games')
@@ -197,3 +208,27 @@ class GameNightRankings(db.Model):  # SQL View
     position_counts = db.Column(db.ARRAY(db.Integer), nullable=False)  # Array of position counts
     overall_score = db.Column(db.Integer, nullable=False)
     rank = db.Column(db.Integer, nullable=False)
+
+class GameNightGameResults(db.Model):  # SQL View
+    __tablename__ = "game_night_game_results"
+    __table_args__ = {"extend_existing": True}  # Ensures compatibility
+
+    game_night_game_id = db.Column(db.Integer, primary_key=True)
+    game_night_id = db.Column(db.Integer, nullable=False)
+    game_name = db.Column(db.String, nullable=False)
+    player_id = db.Column(db.Integer, nullable=False)
+    player_first_name = db.Column(db.String, nullable=False)
+    player_last_name = db.Column(db.String, nullable=False)
+    position = db.Column(db.Integer, nullable=False)
+    score = db.Column(db.Integer, nullable=True)
+
+
+class GameNightNominationsVotes(db.Model):  # SQL View
+    __tablename__ = "game_night_nominations_votes"
+    __table_args__ = {"extend_existing": True}  # Ensures compatibility
+
+    game_night_id = db.Column(db.Integer, primary_key=True)
+    game_id = db.Column(db.Integer, primary_key=True)
+    game_name = db.Column(db.String, nullable=False)
+    total_nominations = db.Column(db.Integer, nullable=False)
+    vote_score = db.Column(db.Integer, nullable=False)
