@@ -218,6 +218,7 @@ class GameNightGameResults(db.Model):  # SQL View
     game_night_game_id = db.Column(db.Integer, primary_key=True)
     game_night_id = db.Column(db.Integer, nullable=False)
     game_name = db.Column(db.String, nullable=False)
+    game_image_url = db.Column(db.String, nullable=True)
     player_id = db.Column(db.Integer, nullable=False)
     player_first_name = db.Column(db.String, nullable=False)
     player_last_name = db.Column(db.String, nullable=False)
