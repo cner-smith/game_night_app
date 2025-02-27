@@ -195,11 +195,21 @@ def get_view_game_night_details(game_night_id, current_user_id):
         user_votes = {vote.game_id: vote.rank for vote in user_votes_query}
 
     # Fetch nominations and vote scores using the SQL View
-    nominations = GameNightNominationsVotes.query.filter_by(game_night_id=game_night_id).order_by(
-        GameNightNominationsVotes.vote_score.desc(),
-        GameNightNominationsVotes.total_nominations.desc(),
-        GameNightNominationsVotes.game_name
-    ).all()
+    nominations = [
+        {
+            "game_id": nomination.game_id,
+            "game_name": nomination.game_name,
+            "image_url": nomination.image_url,  # ✅ Added image_url
+            "total_nominations": nomination.total_nominations,
+            "vote_score": nomination.vote_score,
+            "user_vote": user_votes.get(nomination.game_id, None)  # ✅ Added user_vote
+        }
+        for nomination in GameNightNominationsVotes.query.filter_by(game_night_id=game_night_id).order_by(
+            GameNightNominationsVotes.vote_score.desc(),
+            GameNightNominationsVotes.total_nominations.desc(),
+            GameNightNominationsVotes.game_name
+        ).all()
+    ]
 
     # Get eligible games for nomination (exclude already nominated games)
     nominated_game_ids = {n.game_id for n in nominations}

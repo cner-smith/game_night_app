@@ -220,11 +220,7 @@ class GameNightGameResults(db.Model):  # SQL View
     game_id = db.Column(db.Integer, nullable=False)
     game_name = db.Column(db.String, nullable=False)
     game_image_url = db.Column(db.String, nullable=True)
-    player_id = db.Column(db.Integer, nullable=False)
-    player_first_name = db.Column(db.String, nullable=False)
-    player_last_name = db.Column(db.String, nullable=False)
-    position = db.Column(db.Integer, nullable=False)
-    score = db.Column(db.Integer, nullable=True)
+    results = db.Column(db.JSON, nullable=False)
 
 
 class GameNightNominationsVotes(db.Model):  # SQL View
