@@ -26,13 +26,17 @@ def test_game_night(game_night_id):
     # Fetch the current user's player record for this game night
     current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=current_user.id).first()
 
+    if not current_player:
+        return jsonify({"error": "User is not a participant in this game night"}), 403  # Prevents access issues
+
     # Fetch the user's votes
     user_votes = {}
-    if current_player:
-        user_votes_query = GameVotes.query.filter_by(
-            game_night_id=game_night_id,
-            player_id=current_player.id
-        ).all()
+    user_votes_query = GameVotes.query.filter_by(
+        game_night_id=game_night_id,
+        player_id=current_player.id  # Ensure correct relationship
+    ).all()
+
+    if user_votes_query:
         user_votes = {vote.game_id: vote.rank for vote in user_votes_query}
 
     # Fetch nominations and vote scores using the SQL View
@@ -40,10 +44,10 @@ def test_game_night(game_night_id):
         {
             "game_id": nomination.game_id,
             "game_name": nomination.game_name,
-            "image_url": nomination.image_url,  # ✅ Image URL
+            "image_url": nomination.image_url,
             "total_nominations": nomination.total_nominations,
             "vote_score": nomination.vote_score,
-            "user_vote": user_votes.get(nomination.game_id, None)  # ✅ User Vote
+            "user_vote": user_votes.get(nomination.game_id)  # Ensures user vote is linked correctly
         }
         for nomination in GameNightNominationsVotes.query.filter_by(game_night_id=game_night_id).order_by(
             GameNightNominationsVotes.vote_score.desc(),
@@ -53,6 +57,6 @@ def test_game_night(game_night_id):
     ]
 
     return jsonify({
-        "user_votes": user_votes,  # ✅ Separate user votes
+        "user_votes": user_votes,  # Should now correctly display user votes
         "nominations": nominations
     })
