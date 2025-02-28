@@ -1,4 +1,4 @@
-from app.models import db, GameNominations, GameVotes
+from app.models import db, GameNominations, GameVotes, Player
 
 def nominate_game(game_night_id, user_id, game_id):
     """Handles nomination of a game for an upcoming game night."""
@@ -25,6 +25,13 @@ def nominate_game(game_night_id, user_id, game_id):
 
 def vote_game(game_night_id, user_id, votes_dict):
     """Handles voting for nominated games in a game night."""
+    current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=user_id).first()
+
+    if not current_player:
+        return False, "User is not a player in this game night."
+
+    player_id = current_player.id
+
     used_ranks = set()
     for game_id, rank in votes_dict.items():
         if rank in used_ranks:
@@ -34,7 +41,7 @@ def vote_game(game_night_id, user_id, votes_dict):
     for game_id, rank in votes_dict.items():
         existing_vote = GameVotes.query.filter_by(
             game_night_id=game_night_id,
-            player_id=user_id,
+            player_id=player_id,
             game_id=game_id
         ).first()
         
@@ -47,7 +54,7 @@ def vote_game(game_night_id, user_id, votes_dict):
             else:
                 new_vote = GameVotes(
                     game_night_id=game_night_id,
-                    player_id=user_id,
+                    player_id=player_id,
                     game_id=game_id,
                     rank=rank
                 )
