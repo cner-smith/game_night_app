@@ -2,21 +2,28 @@ from app.models import db, GameNominations, GameVotes, Player
 
 def nominate_game(game_night_id, user_id, game_id):
     """Handles nomination of a game for an upcoming game night."""
+    current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=user_id).first()
+
+    if not current_player:
+        return False, "User is not a player in this game night."
+
+    player_id = current_player.id
+
     if not game_id:
         return False, "You must select a game to nominate."
     
     existing_nomination = GameNominations.query.filter_by(game_night_id=game_night_id, game_id=game_id).first()
-    if existing_nomination and existing_nomination.player_id != user_id:
+    if existing_nomination and existing_nomination.player_id != player_id:
         return False, "This game has already been nominated by another player."
     
-    GameVotes.query.filter_by(game_night_id=game_night_id, player_id=user_id).delete()
-    nomination = GameNominations.query.filter_by(game_night_id=game_night_id, player_id=user_id).first()
+    GameVotes.query.filter_by(game_night_id=game_night_id, player_id=player_id).delete()
+    nomination = GameNominations.query.filter_by(game_night_id=game_night_id, player_id=player_id).first()
     
     if nomination:
         nomination.game_id = game_id
         message = "Your nomination has been updated, and your votes have been cleared."
     else:
-        new_nomination = GameNominations(game_night_id=game_night_id, player_id=user_id, game_id=game_id)
+        new_nomination = GameNominations(game_night_id=game_night_id, player_id=player_id, game_id=game_id)
         db.session.add(new_nomination)
         message = "Your nomination has been submitted, and any previous votes have been cleared."
     
