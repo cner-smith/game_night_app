@@ -27,7 +27,9 @@ def test_game_night(game_night_id):
     current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=current_user.id).first()
 
     if not current_player:
-        return jsonify({"error": "User is not a participant in this game night"}), 403  # Prevents access issues
+        return jsonify({"error": "User is not a participant in this game night"}), 403
+
+    print(f"DEBUG: Current Player ID = {current_player.id}")  # ✅ Debug output
 
     # Fetch the user's votes
     user_votes = {}
@@ -35,6 +37,8 @@ def test_game_night(game_night_id):
         game_night_id=game_night_id,
         player_id=current_player.id  # Ensure correct relationship
     ).all()
+
+    print(f"DEBUG: User Votes Query Result = {user_votes_query}")  # ✅ Debug output
 
     if user_votes_query:
         user_votes = {vote.game_id: vote.rank for vote in user_votes_query}
@@ -57,6 +61,8 @@ def test_game_night(game_night_id):
     ]
 
     return jsonify({
-        "user_votes": user_votes,  # Should now correctly display user votes
+        "debug_current_player_id": current_player.id,  # ✅ Debugging
+        "debug_user_votes_query": [str(vote) for vote in user_votes_query],  # ✅ Debugging
+        "user_votes": user_votes,
         "nominations": nominations
     })
