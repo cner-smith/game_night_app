@@ -1,0 +1,43 @@
+services:
+
+  game_night_app:
+    build: /home/sgammill/projects/game_night_app
+    container_name: game_night_app
+    environment:
+      - POSTGRES_USER
+      - POSTGRES_PASSWORD
+      - POSTGRES_DB
+      - FLASK_DEBUG
+      - SECRET_KEY
+      - DATABASE_URL
+      - PGHOST
+      - PGPORT
+      - MAIL_SERVER
+      - MAIL_PORT
+      - MAIL_USE_TLS
+      - MAIL_USE_SSL
+      - MAIL_USERNAME
+      - MAIL_PASSWORD
+      - MAIL_DEFAULT_SENDER
+      - FLASK_APP
+    restart: always
+    volumes:
+      - /home/sgammill/projects/game_night_app/app/templates:/app/templates
+      - /home/sgammill/projects/game_night_app/app/static:/app/static
+    networks:
+      - web_network
+    labels:
+      - "traefik.enable=true"
+
+      # Router for game night app
+      - "traefik.http.routers.game_night.rule=Host(`game_night.sgammill.com`)"
+      - "traefik.http.routers.game_night.entrypoints=websecure"
+      - "traefik.http.routers.game_night.tls.certresolver=cloudflare"
+      - "traefik.http.routers.game_night.middlewares=authelia-forward-auth@file"
+
+      # Service config
+      - "traefik.http.services.game_night.loadbalancer.server.port=8000"
+
+networks:
+  web_network:
+    external: true
