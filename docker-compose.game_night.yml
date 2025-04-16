@@ -1,7 +1,7 @@
 services:
 
   game_night_app:
-    build: /home/sgammill/projects/game_night_app
+    build: .
     container_name: game_night_app
     environment:
       - POSTGRES_USER
