@@ -168,6 +168,7 @@
                         {% endif %}
                     </button>
                 </form>
+                <a href="{{ url_for('game_night.edit_game_night', game_night_id=game_night.id) }}" class="btn-edit-game-night">Edit Game Night</a>
             </section>
         {% endif %}
     </div>

@@ -66,6 +66,18 @@ def edit_game_night(game_night_id, date_str, notes, attendees_ids):
     db.session.commit()
     return True, "Game night updated successfully."
 
+def delete_game_night(game_night_id):
+    game_night = GameNight.query.get(game_night_id)
+    if not game_night:
+        return False, "Game night not found."
+
+    if game_night.final:
+        return False, "You cannot delete a finalized game night."
+
+    db.session.delete(game_night)
+    db.session.commit()
+    return True, "Game night deleted successfully."
+
 def manage_game_in_night(game_night_id, game_id, action="add", round_number=None):
     """Add or remove a game from a game night."""
     if action == "add":

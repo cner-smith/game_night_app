@@ -155,3 +155,10 @@ def add_game_to_night(game_night_id):
     }
     return render_template("add_game_to_night.html", **context)
 
+@game_night_bp.route("/game_night/<int:game_night_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def delete_game_night(game_night_id):
+    success, message = game_night_services.delete_game_night(game_night_id)
+    flash(message, "success" if success else "error")
+    return redirect(url_for("main.index"))
