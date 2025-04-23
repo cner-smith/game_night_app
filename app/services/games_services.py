@@ -36,13 +36,12 @@ def get_or_create_game(game_name, bgg_id=None):
 
 
 def get_filtered_games(user_id, name_filter=None, players_filter=None, playtime_filter=None):
-
     user = Person.query.get(user_id)
 
     # Base query
     query = GamesIndex.query
 
-    # Restrict if not admin/owner
+    # If not admin/owner, limit scope
     if not user.is_admin_or_owner:
         query = query.filter(
             db.or_(
@@ -61,7 +60,11 @@ def get_filtered_games(user_id, name_filter=None, players_filter=None, playtime_
 
     games = query.order_by(GamesIndex.game_name).all()
 
-    # Wishlist lookup
+    # Build lookup for current user's ownership and wishlist
+    owned_game_ids = {
+        ob.game_id for ob in OwnedBy.query.filter_by(person_id=user_id).all()
+    }
+
     wishlist_game_ids = {
         w.game_id for w in Wishlist.query.filter_by(person_id=user_id).all()
     }
@@ -69,7 +72,7 @@ def get_filtered_games(user_id, name_filter=None, players_filter=None, playtime_
     return [
         {
             "game": game,
-            "user_owns_game": game.user_owns_game,
+            "user_owns_game": game.game_id in owned_game_ids,
             "in_wishlist": game.game_id in wishlist_game_ids
         }
         for game in games
