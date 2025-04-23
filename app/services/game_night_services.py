@@ -243,6 +243,10 @@ def get_view_game_night_details(game_night_id, current_user_id):
         w.game_id for w in Wishlist.query.filter_by(person_id=current_user_id).all()
     }
     
+    owned_game_ids = {
+        ob.game_id for ob in OwnedBy.query.filter_by(person_id=current_user_id).all()
+    }
+    
     return {
         "game_night": game_night,
         "players": players,
@@ -255,6 +259,7 @@ def get_view_game_night_details(game_night_id, current_user_id):
             (rank, player_ids) for rank, player_ids in determine_top_places(game_night_id) if rank in {1, 2, 3}
         ],
         "wishlist_game_ids": wishlist_game_ids,
+        "owned_game_ids": owned_game_ids,
     }
 
 def get_filtered_games_for_game_night(game_night_id, name_filter=None, players_filter=None, playtime_filter=None, current_user_id=None):

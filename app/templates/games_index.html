@@ -72,6 +72,7 @@ block content %}
       </form>
       {% endif %}
     </div>
+    {% if not item.user_owns_game %}
     <form
       action="{{ url_for('games.toggle_wishlist', game_id=game.game_id) }}"
       method="POST"
@@ -85,6 +86,7 @@ block content %}
       <button type="submit" class="btn-wishlist-toggle">Add to Wishlist</button>
       {% endif %}
     </form>
+    {% endif %}
   </li>
   {% else %}
   <li class="text-center">No games found.</li>

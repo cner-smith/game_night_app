@@ -106,7 +106,14 @@ def remove_from_wishlist(game_id):
 @games_bp.route("/wishlist/toggle/<int:game_id>", methods=["POST"])
 @login_required
 def toggle_wishlist(game_id):
-    from app.models import Wishlist  # or wherever your Wishlist model lives
+    from app.models import Wishlist, OwnedBy  # Adjust if needed
+
+    # If already owned, prevent wishlisting
+    owns_game = OwnedBy.query.filter_by(game_id=game_id, person_id=current_user.id).first()
+    if owns_game:
+        flash("You already own this game — no need to wishlist it.", "info")
+        return redirect(request.referrer or url_for("games.wishlist"))
+
     existing = Wishlist.query.filter_by(game_id=game_id, person_id=current_user.id).first()
     if existing:
         success, message = games_services.modify_wishlist(current_user.id, game_id, remove=True)
