@@ -71,10 +71,17 @@ def edit_game_night(game_night_id):
 @admin_required
 def manage_game_in_night(game_night_id):
     action = request.form.get("action")
+    game_night_game_id = request.form.get("game_night_game_id")
     game_id = request.form.get("game_id")
     round_number = request.form.get("round_number")
 
-    success, message = game_night_services.manage_game_in_night(game_night_id, game_id, action, round_number)
+    success, message = game_night_services.manage_game_in_night(
+        game_night_id,
+        game_id,
+        action,
+        round_number,
+        game_night_game_id
+    )
     flash(message, "success" if success else "error")
 
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))

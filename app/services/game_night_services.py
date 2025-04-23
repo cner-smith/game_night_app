@@ -78,7 +78,7 @@ def delete_game_night(game_night_id):
     db.session.commit()
     return True, "Game night deleted successfully."
 
-def manage_game_in_night(game_night_id, game_id, action="add", round_number=None):
+def manage_game_in_night(game_night_id, game_id, action="add", round_number=None, game_night_game_id=None):
     """Add or remove a game from a game night."""
     if action == "add":
         if not game_id or not round_number:
@@ -88,7 +88,10 @@ def manage_game_in_night(game_night_id, game_id, action="add", round_number=None
         db.session.add(game_night_game)
     
     elif action == "remove":
-        game_night_game = GameNightGame.query.filter_by(game_night_id=game_night_id, game_id=game_id).first()
+        if not game_night_game_id:
+            return False, "Game reference missing."
+
+        game_night_game = GameNightGame.query.get(game_night_game_id)
         if not game_night_game:
             return False, "Game not found in this game night."
         db.session.delete(game_night_game)
