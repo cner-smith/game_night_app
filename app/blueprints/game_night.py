@@ -113,10 +113,24 @@ def toggle_game_night_field(game_night_id, field):
     flash(message, "success" if success else "error")
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
-@game_night_bp.route("/game_night/<int:game_night_id>/add_game", methods=["GET"])
+@game_night_bp.route("/game_night/<int:game_night_id>/add_game", methods=["GET", "POST"])
 @login_required
 @admin_required
 def add_game_to_night(game_night_id):
+    if request.method == "POST":
+        game_id = request.form.get("game_id", type=int)
+        round_number = request.form.get("round", type=int)
+
+        success, message = game_night_services.manage_game_in_night(
+            game_night_id=game_night_id,
+            game_id=game_id,
+            action="add",
+            round_number=round_number
+        )
+
+        flash(message, "success" if success else "danger")
+        return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
+    
     """Render the page for selecting a game and round to add to the game night."""
     game_night = game_night_services.get_game_night_by_id(game_night_id)  # Fetch game night details
 
