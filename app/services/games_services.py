@@ -1,4 +1,4 @@
-from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex
+from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex, Person
 from sqlalchemy import func
 from app.utils import fetch_and_parse_bgg_data
 
@@ -36,11 +36,22 @@ def get_or_create_game(game_name, bgg_id=None):
 
 
 def get_filtered_games(user_id, name_filter=None, players_filter=None, playtime_filter=None):
-    """Retrieve filtered games based on user preferences."""
-    query = GamesIndex.query.filter(
-        db.or_(GamesIndex.owner_id == user_id, GamesIndex.player_owner.is_(True))
-    )
 
+    user = Person.query.get(user_id)
+
+    # Base query
+    query = GamesIndex.query
+
+    # Restrict if not admin/owner
+    if not user.is_admin_or_owner:
+        query = query.filter(
+            db.or_(
+                GamesIndex.owner_id == user_id,
+                GamesIndex.player_owner.is_(True)
+            )
+        )
+
+    # Apply filters
     if name_filter:
         query = query.filter(GamesIndex.game_name.ilike(f"%{name_filter}%"))
     if players_filter is not None:
@@ -50,6 +61,7 @@ def get_filtered_games(user_id, name_filter=None, players_filter=None, playtime_
 
     games = query.order_by(GamesIndex.game_name).all()
 
+    # Wishlist lookup
     wishlist_game_ids = {
         w.game_id for w in Wishlist.query.filter_by(person_id=user_id).all()
     }
