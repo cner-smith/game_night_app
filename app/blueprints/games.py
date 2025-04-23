@@ -102,3 +102,16 @@ def remove_from_wishlist(game_id):
     success, message = games_services.modify_wishlist(current_user.id, game_id, remove=True)
     flash(message, "success" if success else "error")
     return redirect(url_for("games.wishlist"))
+
+@games_bp.route("/wishlist/toggle/<int:game_id>", methods=["POST"])
+@login_required
+def toggle_wishlist(game_id):
+    from app.models import Wishlist  # or wherever your Wishlist model lives
+    existing = Wishlist.query.filter_by(game_id=game_id, person_id=current_user.id).first()
+    if existing:
+        success, message = games_services.modify_wishlist(current_user.id, game_id, remove=True)
+    else:
+        success, message = games_services.modify_wishlist(current_user.id, game_id, add=True)
+
+    flash(message, "success" if success else "error")
+    return redirect(request.referrer or url_for("games.wishlist"))

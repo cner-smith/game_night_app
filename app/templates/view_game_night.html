@@ -38,6 +38,13 @@
                                         <input type="hidden" name="game_night_game_id" value="{{ gng.game_night_game_id }}">
                                         <button type="submit" class="btn-remove-game">Remove Game</button>
                                     </form>
+                                    <form action="{{ url_for('games.toggle_wishlist', game_id=gng.game_id) }}" method="POST" class="wishlist-form">
+                                        {% if gng.game_id in wishlist_game_ids %}
+                                            <button type="submit" class="btn-wishlist-toggle">Remove from Wishlist</button>
+                                        {% else %}
+                                            <button type="submit" class="btn-wishlist-toggle">Add to Wishlist</button>
+                                        {% endif %}
+                                    </form>
                                 {% endif %}
                                 <ul class="results-list">
                                     {% for result in gng.results %}

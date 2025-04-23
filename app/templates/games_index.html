@@ -1,112 +1,148 @@
-{% extends "base.html" %}
+{% extends "base.html" %} {% block title %}Available Games{% endblock %} {%
+block content %}
+<div class="available-games-header">
+  <h1>Available Games</h1>
+  <a
+    href="{{ url_for('games.add_game') }}"
+    class="button"
+    style="background-color: var(--success-color)"
+  >
+    Add a New Game
+  </a>
+</div>
 
-{% block title %}Available Games{% endblock %}
+<!-- Filters -->
+<button id="filter-toggle" class="button">Filters</button>
+<div id="filter-section" class="filters">
+  <form method="GET">
+    <label for="name">Game Name:</label>
+    <input type="text" name="name" value="{{ request.args.get('name', '') }}" />
 
-{% block content %}
-    <div class="available-games-header">
-        <h1>Available Games</h1>
-        <a href="{{ url_for('games.add_game') }}" class="button" style="background-color: var(--success-color);">
-            Add a New Game
-        </a>
+    <label for="players">Number of Players:</label>
+    <input
+      id="players-slider"
+      type="text"
+      name="players"
+      value="{{ request.args.get('players', '') }}"
+    />
+
+    <label for="playtime">Maximum Playtime (minutes):</label>
+    <input
+      id="playtime-slider"
+      type="text"
+      name="playtime"
+      value="{{ request.args.get('playtime', '') }}"
+    />
+
+    <button type="submit">Apply Filters</button>
+  </form>
+</div>
+
+<!-- Games List -->
+<ul class="game-list">
+  {% for item in games %} {% set game = item.game %}
+  <li>
+    <div class="game-info">
+      <img src="{{ game.image_url }}" alt="{{ game.game_name }}" />
+      <div>
+        <a href="{{ url_for('games.view_game', game_id=game.game_id) }}"
+          >{{ game.game_name }}</a
+        >
+        <p>Min Players: {{ game.min_players or 'N/A' }}</p>
+        <p>Max Players: {{ game.max_players or 'N/A' }}</p>
+        <p>Playtime: {{ game.playtime or 'N/A' }} minutes</p>
+      </div>
     </div>
-
-    <!-- Filters -->
-    <button id="filter-toggle" class="button">Filters</button>
-    <div id="filter-section" class="filters">
-        <form method="GET">
-            <label for="name">Game Name:</label>
-            <input type="text" name="name" value="{{ request.args.get('name', '') }}">
-
-            <label for="players">Number of Players:</label>
-            <input id="players-slider" type="text" name="players" value="{{ request.args.get('players', '') }}">
-    
-            <label for="playtime">Maximum Playtime (minutes):</label>
-            <input id="playtime-slider" type="text" name="playtime" value="{{ request.args.get('playtime', '') }}">
-    
-            <button type="submit">Apply Filters</button>
-        </form>
+    <div>
+      {% if not item.user_owns_game %}
+      <form
+        action="{{ url_for('games.claim_game', game_id=game.game_id) }}"
+        method="POST"
+      >
+        <button class="own-game" type="submit">I Own This Game</button>
+      </form>
+      {% else %}
+      <form
+        action="{{ url_for('games.remove_ownership', game_id=game.game_id) }}"
+        method="POST"
+      >
+        <button class="remove-ownership" type="submit">
+          I Don't Own This Game
+        </button>
+      </form>
+      {% endif %}
     </div>
+    <form
+      action="{{ url_for('games.toggle_wishlist', game_id=game.game_id) }}"
+      method="POST"
+      class="wishlist-form"
+    >
+      {% if item.in_wishlist %}
+      <button type="submit" class="btn-wishlist-toggle">
+        Remove from Wishlist
+      </button>
+      {% else %}
+      <button type="submit" class="btn-wishlist-toggle">Add to Wishlist</button>
+      {% endif %}
+    </form>
+  </li>
+  {% else %}
+  <li class="text-center">No games found.</li>
+  {% endfor %}
+</ul>
 
-    <!-- Games List -->
-    <ul class="game-list">
-        {% for item in games %}
-            {% set game = item.game %}
-            <li>
-                <div class="game-info">
-                    <img src="{{ game.image_url }}" alt="{{ game.game_name }}">
-                    <div>
-                        <a href="{{ url_for('games.view_game', game_id=game.game_id) }}">{{ game.game_name }}</a>
-                        <p>Min Players: {{ game.min_players or 'N/A' }}</p>
-                        <p>Max Players: {{ game.max_players or 'N/A' }}</p>
-                        <p>Playtime: {{ game.playtime or 'N/A' }} minutes</p>
-                    </div>
-                </div>
-                <div>
-                    {% if not item.user_owns_game %}
-                        <form action="{{ url_for('games.claim_game', game_id=game.game_id) }}" method="POST">
-                            <button class="own-game" type="submit">I Own This Game</button>
-                        </form>
-                    {% else %}
-                    <form action="{{ url_for('games.remove_ownership', game_id=game.game_id) }}" method="POST">
-                            <button class="remove-ownership" type="submit">I Don't Own This Game</button>
-                        </form>
-                    {% endif %}
-                </div>
-            </li>
-        {% else %}
-            <li class="text-center">No games found.</li>
-        {% endfor %}
-    </ul>
+<!-- Back to Home Button -->
+<div class="text-center mt-1">
+  <a href="{{ url_for('main.index') }}" class="button">Back to Home</a>
+</div>
 
-    <!-- Back to Home Button -->
-    <div class="text-center mt-1">
-        <a href="{{ url_for('main.index') }}" class="button">Back to Home</a>
-    </div>
+<script>
+  document.getElementById("filter-toggle").addEventListener("click", () => {
+    const filterSection = document.getElementById("filter-section");
+    // Toggle the 'active' class to show/hide the filters
+    if (filterSection.classList.contains("active")) {
+      filterSection.classList.remove("active");
+      filterSection.style.display = "none";
+    } else {
+      filterSection.classList.add("active");
+      filterSection.style.display = "block";
+    }
+  });
 
-    <script>
-        document.getElementById('filter-toggle').addEventListener('click', () => {
-            const filterSection = document.getElementById('filter-section');
-            // Toggle the 'active' class to show/hide the filters
-            if (filterSection.classList.contains('active')) {
-                filterSection.classList.remove('active');
-                filterSection.style.display = 'none';
-            } else {
-                filterSection.classList.add('active');
-                filterSection.style.display = 'block';
-            }
-        });
-    
-        // Initialize Sliders
-        const playersSlider = document.getElementById('players-slider');
-        noUiSlider.create(playersSlider, {
-            start: [4], // Default value
-            connect: true,
-            range: {
-                min: 1,
-                max: 20
-            },
-            step: 1
-        });
-    
-        playersSlider.noUiSlider.on('update', (value) => {
-            document.querySelector('input[name="players"]').value = Math.round(value[0]);
-        });
-    
-        const playtimeSlider = document.getElementById('playtime-slider');
-        noUiSlider.create(playtimeSlider, {
-            start: [30], // Default minimum
-            connect: true,
-            range: {
-                min: 15,
-                max: 300
-            },
-            step: 15
-        });
-    
-        playtimeSlider.noUiSlider.on('update', (value) => {
-            document.querySelector('input[name="playtime"]').value = Math.round(value[0]);
-        });
-    </script>
-    
-    
+  // Initialize Sliders
+  const playersSlider = document.getElementById("players-slider");
+  noUiSlider.create(playersSlider, {
+    start: [4], // Default value
+    connect: true,
+    range: {
+      min: 1,
+      max: 20,
+    },
+    step: 1,
+  });
+
+  playersSlider.noUiSlider.on("update", (value) => {
+    document.querySelector('input[name="players"]').value = Math.round(
+      value[0]
+    );
+  });
+
+  const playtimeSlider = document.getElementById("playtime-slider");
+  noUiSlider.create(playtimeSlider, {
+    start: [30], // Default minimum
+    connect: true,
+    range: {
+      min: 15,
+      max: 300,
+    },
+    step: 15,
+  });
+
+  playtimeSlider.noUiSlider.on("update", (value) => {
+    document.querySelector('input[name="playtime"]').value = Math.round(
+      value[0]
+    );
+  });
+</script>
+
 {% endblock %}

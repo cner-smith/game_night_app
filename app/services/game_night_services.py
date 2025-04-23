@@ -1,4 +1,4 @@
-from app.models import db, GameNight, Player, GameNightGame, Result, Game, GameNightRankings, GameNominations, GameVotes, OwnedBy, GameNightNominationsVotes, GameNightGameResults
+from app.models import db, GameNight, Player, GameNightGame, Result, Game, GameNightRankings, GameNominations, GameVotes, OwnedBy, GameNightNominationsVotes, GameNightGameResults, Wishlist
 from datetime import datetime
 from app.services.admin_services import get_all_people
 from collections import defaultdict
@@ -238,6 +238,11 @@ def get_view_game_night_details(game_night_id, current_user_id):
         ~Game.id.in_(nominated_game_ids)
     ).order_by(Game.name).all()
 
+    #Get the games on the user's wishlist
+    wishlist_game_ids = {
+        w.game_id for w in Wishlist.query.filter_by(person_id=current_user_id).all()
+    }
+    
     return {
         "game_night": game_night,
         "players": players,
@@ -249,20 +254,22 @@ def get_view_game_night_details(game_night_id, current_user_id):
         "top_places": None if not results_logged else [
             (rank, player_ids) for rank, player_ids in determine_top_places(game_night_id) if rank in {1, 2, 3}
         ],
+        "wishlist_game_ids": wishlist_game_ids,
     }
 
-def get_filtered_games_for_game_night(game_night_id, name_filter=None, players_filter=None, playtime_filter=None):
-    """Retrieve filtered games based on ownership by game night attendees."""
+def get_filtered_games_for_game_night(game_night_id, name_filter=None, players_filter=None, playtime_filter=None, current_user_id=None):
+    """Retrieve filtered games based on ownership by game night attendees, including wishlist status."""
     game_night = GameNight.query.get_or_404(game_night_id)
     player_ids = [player.people_id for player in game_night.players]  # Get attendees
 
-    # Get game IDs owned by any attendees
-    owned_game_ids = db.session.query(OwnedBy.game_id).filter(OwnedBy.person_id.in_(player_ids)).subquery()
-    
-    # Query games based on owned game IDs
+    # Get games owned by attendees
+    owned_game_ids = db.session.query(OwnedBy.game_id).filter(
+        OwnedBy.person_id.in_(player_ids)
+    ).subquery()
+
     query = Game.query.filter(Game.id.in_(owned_game_ids))
 
-    # Apply optional filters
+    # Apply filters
     if name_filter:
         query = query.filter(Game.name.ilike(f"%{name_filter}%"))
     if players_filter is not None:
@@ -270,4 +277,19 @@ def get_filtered_games_for_game_night(game_night_id, name_filter=None, players_f
     if playtime_filter is not None:
         query = query.filter(Game.playtime <= playtime_filter)
 
-    return query.order_by(Game.name).all()
+    games = query.order_by(Game.name).all()
+
+    # Get wishlist status
+    wishlist_game_ids = set()
+    if current_user_id:
+        wishlist_game_ids = {
+            w.game_id for w in Wishlist.query.filter_by(person_id=current_user_id).all()
+        }
+
+    return [
+        {
+            "game": game,
+            "in_wishlist": game.id in wishlist_game_ids
+        }
+        for game in games
+    ]

@@ -49,7 +49,19 @@ def get_filtered_games(user_id, name_filter=None, players_filter=None, playtime_
         query = query.filter(GamesIndex.playtime <= playtime_filter)
 
     games = query.order_by(GamesIndex.game_name).all()
-    return [{"game": game, "user_owns_game": game.user_owns_game} for game in games]
+
+    wishlist_game_ids = {
+        w.game_id for w in Wishlist.query.filter_by(person_id=user_id).all()
+    }
+
+    return [
+        {
+            "game": game,
+            "user_owns_game": game.user_owns_game,
+            "in_wishlist": game.game_id in wishlist_game_ids
+        }
+        for game in games
+    ]
 
 
 def add_game(user_id, game_name, bgg_id=None):

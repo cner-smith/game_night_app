@@ -148,7 +148,11 @@ def add_game_to_night(game_night_id):
 
     # Fetch games that match criteria
     games = game_night_services.get_filtered_games_for_game_night(
-        game_night_id, name_filter, players_filter, playtime_filter
+        game_night_id,
+        name_filter,
+        players_filter,
+        playtime_filter,
+        current_user_id=current_user.id
     )
 
     context = {
