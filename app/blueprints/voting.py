@@ -1,5 +1,5 @@
-from flask import Blueprint, redirect, url_for, flash, request
-from flask_login import login_required, current_user, render_template
+from flask import Blueprint, redirect, url_for, flash, request, render_template
+from flask_login import login_required, current_user
 from app.services import voting_services
 from app.utils import game_night_access_required, flash_if_no_action
 
