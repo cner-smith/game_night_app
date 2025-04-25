@@ -46,7 +46,7 @@ block content %}
   id="nominate-game-form"
 >
   <ul class="game-list">
-    {% for game in eligible_games %}
+    {% for item in eligible_games %} {% set game = item.game %}
     <li class="game-item" data-game-id="{{ game.id }}">
       <div class="game-info">
         <img src="{{ game.image_url }}" alt="{{ game.name }}" />
@@ -58,17 +58,16 @@ block content %}
             }}
           </p>
 
-          {% if game.id in wishlist_game_ids %}
-          <p class="wishlist-status">In your wishlist</p>
+          {% if item.in_wishlist %}
+          <p class="wishlist-status">⭐ In your wishlist</p>
           {% else %}
-          <form
-            method="POST"
-            action="{{ url_for('games.toggle_wishlist', game_id=game.id) }}"
+          <button
+            type="button"
+            class="btn-wishlist-toggle"
+            onclick="addToWishlist({{ game.id }})"
           >
-            <button type="submit" class="btn-wishlist-toggle">
-              Add to Wishlist
-            </button>
-          </form>
+            Add to Wishlist
+          </button>
           {% endif %}
         </div>
       </div>
@@ -149,5 +148,29 @@ block content %}
         }
       });
   });
+
+  function addToWishlist(gameId) {
+    fetch(
+      "{{ url_for('games.toggle_wishlist', game_id=0) }}".replace("0", gameId),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    )
+      .then((response) => {
+        if (response.ok) {
+          alert("Game added to wishlist!");
+          location.reload();
+        } else {
+          alert("Failed to add game to wishlist.");
+        }
+      })
+      .catch((error) => {
+        console.error("Error:", error);
+        alert("An error occurred while adding to wishlist.");
+      });
+  }
 </script>
 {% endblock %}

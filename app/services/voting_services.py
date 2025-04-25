@@ -82,12 +82,24 @@ def get_nominate_game_page_context(game_night_id, current_user_id):
     players_filter = request.args.get("players", type=int)
     playtime_filter = request.args.get("playtime", type=int)
 
-    eligible_games = get_eligible_games_for_nomination(
+    raw_games = get_eligible_games_for_nomination(
         game_night_id,
         name_filter=name_filter,
         players_filter=players_filter,
         playtime_filter=playtime_filter
     )
+
+    wishlist_game_ids = {
+        w.game_id for w in Wishlist.query.filter_by(person_id=current_user_id).all()
+    }
+
+    eligible_games = [
+        {
+            "game": game,
+            "in_wishlist": game.id in wishlist_game_ids
+        }
+        for game in raw_games
+    ]
 
     current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=current_user_id).first()
     user_nomination_id = None
@@ -95,10 +107,6 @@ def get_nominate_game_page_context(game_night_id, current_user_id):
         nomination = GameNominations.query.filter_by(game_night_id=game_night_id, player_id=current_player.id).first()
         if nomination:
             user_nomination_id = nomination.game_id
-
-    wishlist_game_ids = {
-        w.game_id for w in Wishlist.query.filter_by(person_id=current_user_id).all()
-    }
 
     return {
         "eligible_games": eligible_games,
