@@ -77,7 +77,7 @@ def get_nominate_game_page_context(game_night_id, current_user_id):
     game_night = GameNight.query.get_or_404(game_night_id)
 
     # Eligible games
-    eligible_games = get_eligible_games_for_nomination(game_night_id, current_user_id)
+    eligible_games = get_eligible_games_for_nomination(game_night_id)
 
     # User's existing nomination
     current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=current_user_id).first()
