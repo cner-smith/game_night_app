@@ -1,5 +1,5 @@
 from flask import Blueprint, redirect, url_for, flash, request
-from flask_login import login_required, current_user
+from flask_login import login_required, current_user, render_template
 from app.services import voting_services
 from app.utils import game_night_access_required, flash_if_no_action
 
@@ -15,6 +15,15 @@ def nominate_game(game_night_id):
     
     context = {"game_night_id": game_night_id}
     return redirect(url_for("game_night.view_game_night", **context))
+
+
+@voting_bp.route("/game_night/<int:game_night_id>/nominate", methods=["GET"])
+@login_required
+@game_night_access_required
+def nominate_game_page(game_night_id):
+    """Show a page where user can visually nominate a game."""
+    context = voting_services.get_nominate_game_page_context(game_night_id, current_user.id)
+    return render_template("nominate_game.html", **context)
 
 
 @voting_bp.route("/game_night/<int:game_night_id>/vote", methods=["POST"])
@@ -39,3 +48,4 @@ def vote_game(game_night_id):
     
     context = {"game_night_id": game_night_id}
     return redirect(url_for("game_night.view_game_night", **context))
+

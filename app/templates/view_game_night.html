@@ -79,17 +79,9 @@
         {% if not game_night.closed %}
             <section class="nominations-section">
                 <h2>Nominate a Game</h2>
-                <form method="POST" action="{{ url_for('voting.nominate_game', game_night_id=game_night.id) }}" class="form-nomination">
-                    <select name="game_id" required class="dropdown-nomination">
-                        <option value="" disabled>Select a game</option>
-                        {% for game in eligible_games %}
-                            <option value="{{ game.id }}" {% if user_nomination and user_nomination.game_id == game.id %}selected{% endif %}>
-                                {{ game.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                    <button type="submit" class="btn-nominate">Nominate</button>
-                </form>
+                <a href="{{ url_for('voting.nominate_game_page', game_night_id=game_night.id) }}" class="btn-nominate">
+                Nominate a Game
+                </a>
             </section>
         {% endif %}
 
