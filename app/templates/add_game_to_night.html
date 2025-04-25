@@ -73,19 +73,21 @@
   <input type="hidden" name="game_id" id="selected-game-id" />
 
   <!-- Sticky Footer -->
-  <div class="footer">
+  <div class="add-game-to-night-footer">
     <label for="round">Round:</label>
     <input type="number" name="round" min="1" value="{{ next_round }}" />
+
     <button type="submit">Add Game</button>
+
+    <a
+      href="{{ url_for('game_night.view_game_night', game_night_id=game_night.id) }}"
+      class="button"
+      style="text-decoration: none"
+    >
+      Back to Game Night
+    </a>
   </div>
 </form>
-
-<br />
-<a
-  href="{{ url_for('game_night.view_game_night', game_night_id=game_night.id) }}"
-  class="button"
-  >Back to Game Night</a
->
 
 <script>
   document.addEventListener("DOMContentLoaded", () => {
