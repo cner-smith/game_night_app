@@ -1,4 +1,4 @@
-from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex, Person
+from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex, Person, GameRatings
 from sqlalchemy import func
 from app.utils import fetch_and_parse_bgg_data
 
@@ -82,11 +82,16 @@ def get_filtered_games(user_id, name_filter=None, players_filter=None, playtime_
         w.game_id for w in Wishlist.query.filter_by(person_id=user_id).all()
     }
 
+    ratings_by_game_id = {
+        r.game_id: r.ranking for r in GameRatings.query.filter_by(person_id=user_id).all()
+    }
+
     return [
         {
             "game": game,
             "user_owns_game": game.game_id in owned_game_ids,
-            "in_wishlist": game.game_id in wishlist_game_ids
+            "in_wishlist": game.game_id in wishlist_game_ids,
+            "user_rating": ratings_by_game_id.get(game.game_id),
         }
         for game in games
     ]

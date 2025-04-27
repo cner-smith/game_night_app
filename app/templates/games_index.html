@@ -51,6 +51,13 @@ block content %}
         <p>Min Players: {{ game.min_players or 'N/A' }}</p>
         <p>Max Players: {{ game.max_players or 'N/A' }}</p>
         <p>Playtime: {{ game.playtime or 'N/A' }} minutes</p>
+
+        {% if item.user_rating is not none %}
+        <p>Your Rating: {{ item.user_rating }}/10</p>
+        {% else %}
+        <p>Your Rating: Not Rated</p>
+        {% endif %}
+        
       </div>
     </div>
     <div>
