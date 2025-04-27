@@ -41,12 +41,13 @@ def add_game():
 @games_bp.route("/game/<int:game_id>")
 @login_required
 def view_game(game_id):
-    game, leaderboard, game_nights = games_services.get_game_details(game_id)
-    
+    game, leaderboard, game_nights, user_rating = games_services.get_game_details(game_id, current_user.id)
+
     context = {
         "game": game,
         "leaderboard": leaderboard,
-        "game_nights": game_nights
+        "game_nights": game_nights,
+        "user_rating": user_rating,
     }
     return render_template("view_game.html", **context)
 
@@ -122,3 +123,13 @@ def toggle_wishlist(game_id):
 
     flash(message, "success" if success else "error")
     return redirect(request.referrer or url_for("games.wishlist"))
+
+@games_bp.route("/game/<int:game_id>/rating", methods=["POST"])
+@login_required
+def update_rating(game_id):
+    ranking = request.form.get("ranking", type=int)
+
+    success, message = games_services.update_game_rating(game_id, current_user.id, ranking)
+
+    flash(message, "success" if success else "error")
+    return redirect(url_for("games.view_game", game_id=game_id))

@@ -168,9 +168,10 @@ def modify_ownership(user_id, game_id, add=True):
     return False, "You do not own this game."
 
 
-def get_game_details(game_id):
-    """Retrieve details of a game, including leaderboard and game nights."""
+def get_game_details(game_id, user_id):
+    """Retrieve details of a game, including leaderboard, game nights, and user's rating."""
     game = Game.query.get_or_404(game_id)
+
     leaderboard = (
         db.session.query(Player, func.count(Result.id).label("wins"))
         .join(Result)
@@ -181,10 +182,39 @@ def get_game_details(game_id):
         .limit(3)
         .all()
     )
-    game_nights = GameNight.query.join(GameNightGame).filter(GameNightGame.game_id == game_id).order_by(GameNight.date.desc()).all()
-    return game, leaderboard, game_nights
+
+    game_nights = (
+        GameNight.query
+        .join(GameNightGame)
+        .filter(GameNightGame.game_id == game_id)
+        .order_by(GameNight.date.desc())
+        .all()
+    )
+
+    user_rating_obj = GameRatings.query.filter_by(game_id=game_id, person_id=user_id).first()
+    user_rating = user_rating_obj.ranking if user_rating_obj else None
+
+    return game, leaderboard, game_nights, user_rating
+
 
 
 def get_wishlist(user_id):
     """Displays the user's wishlist."""
     return Game.query.join(Wishlist).filter(Wishlist.person_id == user_id).order_by(Game.name).all()
+
+def update_game_rating(game_id, user_id, ranking):
+    """Update or create a game rating for a user."""
+    if ranking is None or not (0 <= ranking <= 10):
+        return False, "Invalid rating. Must be between 0 and 10."
+
+    rating = GameRatings.query.filter_by(game_id=game_id, person_id=user_id).first()
+
+    if rating:
+        rating.ranking = ranking  # Update existing
+    else:
+        rating = GameRatings(game_id=game_id, person_id=user_id, ranking=ranking)
+        db.session.add(rating)
+
+    db.session.commit()
+
+    return True, "Rating saved successfully."
