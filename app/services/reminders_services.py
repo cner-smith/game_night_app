@@ -7,10 +7,12 @@ from app.utils import send_email
 from app.extensions import scheduler
 from apscheduler.triggers.cron import CronTrigger
 
+# Define timezone globally
+central = pytz.timezone("America/Chicago")
+
 def check_and_send_reminders():
     """Checks for upcoming game nights and sends reminder emails to participants."""
-    central_timezone = pytz.timezone("America/Chicago")
-    today_central = datetime.now(central_timezone).date()
+    today_central = datetime.now(central).date()
 
     game_nights = GameNight.query.filter_by(date=today_central).all()
     if not game_nights:
@@ -72,12 +74,12 @@ def start_scheduler(app):
     """Start the background scheduler for reminders."""
     from app.services.reminders_services import check_and_send_reminders
 
-    scheduler.configure(timezone="America/Chicago")
+    scheduler.configure(timezone=central)
 
-    with app.app_context():  # Create jobs within the app context
+    with app.app_context():
         scheduler.add_job(
             func=check_and_send_reminders,
-            trigger=CronTrigger(hour=10, minute=25),
+            trigger=CronTrigger(hour=10, minute=30, timezone=central),
             id="daily_game_night_reminder",
             replace_existing=True
         )
