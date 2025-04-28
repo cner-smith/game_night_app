@@ -1,5 +1,6 @@
 from app.models import db, GameNominations, GameVotes, Player, GameNight, Game, OwnedBy, GameNightNominationsVotes, Wishlist, GameRatings
-from flask import request, func
+from flask import request
+from sqlalchemy import func
 
 def nominate_game(game_night_id, user_id, game_id):
     """Handles nomination of a game for an upcoming game night."""
