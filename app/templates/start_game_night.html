@@ -1,28 +1,158 @@
-<!-- game_night_app/templates/start_game_night.html -->
-
 {% extends "base.html" %}
 
 {% block title %}Start Game Night{% endblock %}
 
 {% block content %}
-    <h1>Start a New Game Night</h1>
+<h1>Start a New Game Night</h1>
 
-    <form action="{{ url_for('game_night.start_game_night') }}" method="POST">
-        <label for="date">Date:</label>
-        <input type="date" name="date" required><br><br>
+<form action="{{ url_for('game_night.start_game_night') }}" method="POST">
+    <label for="date">Date:</label>
+    <input type="date" name="date" required><br><br>
 
-        <label for="notes">Notes:</label><br>
-        <textarea name="notes" rows="4" cols="50"></textarea><br><br>
+    <label for="notes">Notes:</label><br>
+    <textarea name="notes" rows="4" cols="50"></textarea><br><br>
 
-        <h3>Attendees:</h3>
-        {% for person in people %}
-            <input type="checkbox" name="attendees" value="{{ person.id }}"> {{ person.first_name }} {{ person.last_name }}<br>
-        {% else %}
-            <p>No people found. <a href="{{ url_for('admin.add_person') }}">Add a person</a></p>
-        {% endfor %}
-        <br>
-        <button type="submit">Start Game Night</button>
-    </form>
+    <h3>Attendees:</h3>
+
+    <!-- Search box -->
+    <input type="text" id="searchBox" placeholder="Search for a name..." autocomplete="off">
+    <br><br>
+
+    <!-- Attendees list container -->
+    <div id="attendeesContainer" style="border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px;">
+        <!-- People checkboxes will be inserted here by JavaScript -->
+    </div>
+
+    <!-- Pagination controls -->
+    <div id="pagination" style="margin-top: 10px;">
+        <button type="button" id="prevPage">Previous</button>
+        <span id="pageInfo"></span>
+        <button type="button" id="nextPage">Next</button>
+    </div>
+
     <br>
-    <a href="{{ url_for('main.index') }}">Back to Home</a>
+    <button type="submit">Start Game Night</button>
+</form>
+
+<br>
+<a href="{{ url_for('main.index') }}">Back to Home</a>
+
+<!-- JavaScript to handle search, pagination, enter-to-select -->
+<script>
+    const people = [
+        {% for person in people %}
+            { id: {{ person.id }}, name: "{{ person.first_name }} {{ person.last_name }}" },
+        {% endfor %}
+    ];
+
+    let filteredPeople = [...people];
+    let currentPage = 1;
+    const pageSize = 25;
+    let highlightedIndex = 0; // NEW: track which name is highlighted
+
+    const attendeesContainer = document.getElementById('attendeesContainer');
+    const searchBox = document.getElementById('searchBox');
+    const pageInfo = document.getElementById('pageInfo');
+    const prevPage = document.getElementById('prevPage');
+    const nextPage = document.getElementById('nextPage');
+
+    function renderAttendees() {
+        attendeesContainer.innerHTML = '';
+        const start = (currentPage - 1) * pageSize;
+        const end = start + pageSize;
+        const pagePeople = filteredPeople.slice(start, end);
+
+        if (pagePeople.length === 0 && currentPage > 1) {
+            currentPage--;
+            renderAttendees();
+            return;
+        }
+
+        pagePeople.forEach((person, index) => {
+            const label = document.createElement('label');
+            label.style.display = 'block';
+            label.dataset.index = index;
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.name = 'attendees';
+            checkbox.value = person.id;
+            label.appendChild(checkbox);
+            label.appendChild(document.createTextNode(' ' + person.name));
+            attendeesContainer.appendChild(label);
+        });
+
+        pageInfo.textContent = `Page ${currentPage} of ${Math.ceil(filteredPeople.length / pageSize)}`;
+        highlightTopMatch(); // highlight the first one after rendering
+    }
+
+    function updateFilter() {
+        const searchTerm = searchBox.value.toLowerCase();
+        filteredPeople = people.filter(person => person.name.toLowerCase().includes(searchTerm));
+        currentPage = 1;
+        highlightedIndex = 0;
+        renderAttendees();
+    }
+
+    function highlightTopMatch() {
+        const labels = attendeesContainer.querySelectorAll('label');
+        labels.forEach(label => label.style.backgroundColor = ''); // clear previous highlight
+
+        if (labels.length > 0) {
+            labels[highlightedIndex]?.scrollIntoView({ block: "nearest" });
+            labels[highlightedIndex].style.backgroundColor = '#e0f7fa'; // light blue highlight
+        }
+    }
+
+    searchBox.addEventListener('input', updateFilter);
+
+    prevPage.addEventListener('click', () => {
+        if (currentPage > 1) {
+            currentPage--;
+            highlightedIndex = 0;
+            renderAttendees();
+        }
+    });
+
+    nextPage.addEventListener('click', () => {
+        if (currentPage * pageSize < filteredPeople.length) {
+            currentPage++;
+            highlightedIndex = 0;
+            renderAttendees();
+        }
+    });
+
+    searchBox.addEventListener('keydown', (e) => {
+        const labels = attendeesContainer.querySelectorAll('label');
+
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            if (labels.length > 0) {
+                const checkbox = labels[highlightedIndex].querySelector('input[type="checkbox"]');
+                if (checkbox && !checkbox.checked) {
+                    checkbox.checked = true;
+                }
+                searchBox.value = '';
+                highlightedIndex = 0;
+                updateFilter();
+                setTimeout(() => searchBox.focus(), 10); // auto-focus back
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (highlightedIndex < labels.length - 1) {
+                highlightedIndex++;
+                highlightTopMatch();
+            }
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (highlightedIndex > 0) {
+                highlightedIndex--;
+                highlightTopMatch();
+            }
+        }
+    });
+
+    // Initial render
+    renderAttendees();
+</script>
+
 {% endblock %}
