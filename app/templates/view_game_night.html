@@ -31,6 +31,11 @@
                             </a>
                             <div class="game-details">
                                 <strong>{{ gng.game_name }}</strong> (Round {{ gng.round }})
+                                {% if user_ratings_by_game_id.get(gng.game_id) is not none %}
+                                    <p>Your Rating: {{ user_ratings_by_game_id[gng.game_id] }}/10</p>
+                                {% else %}
+                                    <p>Your Rating: Not Rated</p>
+                                {% endif %}
                                 {% if not game_night.final and (current_user.admin or current_user.owner) %}
                                     <a href="{{ url_for('game_night.log_results', game_night_id=game_night.id, game_night_game_id=gng.game_night_game_id) }}" class="btn-log-results">Log Results</a>
                                     <form action="{{ url_for('game_night.manage_game_in_night', game_night_id=game_night.id) }}" method="POST" class="form-inline">
@@ -97,13 +102,19 @@
                                     <img src="{{ nomination.image_url }}" alt="{{ nomination.game_name }}" class="vote-thumbnail">
                                 </a>
                                 <strong>{{ nomination.game_name }}</strong>
-                            
+                                
+                                {% if user_ratings_by_game_id.get(nomination.game_id) is not none %}
+                                    <p>Your Rating: {{ user_ratings_by_game_id[nomination.game_id] }}/10</p>
+                                {% else %}
+                                    <p>Your Rating: Not Rated</p>
+                                {% endif %}
+
                                 {% if nomination.avg_rating is not none %}
                                     <p>Avg Rating: {{ nomination.avg_rating }}/10</p>
                                 {% else %}
                                     <p>Avg Rating: No ratings yet</p>
                                 {% endif %}
-                            
+
                                 <p>Votes: {{ nomination.vote_score or 0 }}</p>
                             
                                 <label for="votes[{{ nomination.game_id }}]">Your Rank:</label>

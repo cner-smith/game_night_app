@@ -247,6 +247,9 @@ def get_view_game_night_details(game_night_id, current_user_id):
         ob.game_id for ob in OwnedBy.query.filter_by(person_id=current_user_id).all()
     }
     
+    user_ratings_query = GameRatings.query.filter_by(person_id=current_user_id).all()
+    user_ratings_by_game_id = {rating.game_id: rating.ranking for rating in user_ratings_query}
+
         # Get player IDs in the game night
     player_people_ids = [player.people_id for player in players]
 
@@ -283,6 +286,7 @@ def get_view_game_night_details(game_night_id, current_user_id):
         ],
         "wishlist_game_ids": wishlist_game_ids,
         "owned_game_ids": owned_game_ids,
+        "user_ratings_by_game_id": user_ratings_by_game_id,
     }
 
 def get_filtered_games_for_game_night(game_night_id, name_filter=None, players_filter=None, playtime_filter=None, current_user_id=None):
