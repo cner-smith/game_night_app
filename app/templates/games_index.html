@@ -35,14 +35,14 @@ block content %}
     />
 
     <label for="min_rating">Minimum Rating:</label>
+    <div id="min-rating-slider"></div>
     <input
-      id="min_rating"
-      type="number"
+      type="hidden"
       name="min_rating"
-      min="0"
-      max="10"
+      id="min_rating"
       value="{{ request.args.get('min_rating', '') }}"
     />
+    <span id="min-rating-value">{{ request.args.get('min_rating', '0') }}</span>/10
 
     <button type="submit">Apply Filters</button>
   </form>
@@ -162,6 +162,23 @@ block content %}
       value[0]
     );
   });
+
+  const minRatingSlider = document.getElementById("min-rating-slider");
+  noUiSlider.create(minRatingSlider, {
+    start: [{{ request.args.get('min_rating', 0) }}], // Default to 0 if none
+    connect: true,
+    range: {
+      min: 0,
+      max: 10,
+    },
+    step: 1,
+  });
+
+  minRatingSlider.noUiSlider.on("update", (value) => {
+    document.getElementById("min_rating").value = Math.round(value[0]);
+    document.getElementById("min-rating-value").textContent = Math.round(value[0]);
+  });
+
 </script>
 
 {% endblock %}
