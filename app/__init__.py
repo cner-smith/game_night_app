@@ -46,10 +46,10 @@ def setup_database(app):
         return Person.query.get(int(user_id))
 
 
-def start_schedulers():
+def start_schedulers(app):
     """Start the background scheduler for reminders."""
     from app.services.reminders_services import start_scheduler
-    start_scheduler()
+    start_scheduler(app)
 
 
 def create_app():

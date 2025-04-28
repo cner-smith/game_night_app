@@ -77,7 +77,7 @@ def start_scheduler(app):
     with app.app_context():  # Create jobs within the app context
         scheduler.add_job(
             func=check_and_send_reminders,
-            trigger=CronTrigger(hour=10, minute=18),
+            trigger=CronTrigger(hour=10, minute=19),
             id="daily_game_night_reminder",
             replace_existing=True
         )
