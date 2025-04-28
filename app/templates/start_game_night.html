@@ -136,10 +136,9 @@
             }
             searchBox.value = '';
             highlightedIndex = 0;
-            setTimeout(() => {
-                searchBox.focus();
-                updateFilter();
-            }, 10);
+            searchBox.focus(); // refocus immediately
+            highlightTopMatch(); // highlight the first item again
+            // NO updateFilter() here
         }
     } else if (e.key === 'ArrowDown') {
         e.preventDefault();
