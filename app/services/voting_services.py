@@ -1,5 +1,5 @@
-from app.models import db, GameNominations, GameVotes, Player, GameNight, Game, OwnedBy, GameNightNominationsVotes, Wishlist
-from flask import request
+from app.models import db, GameNominations, GameVotes, Player, GameNight, Game, OwnedBy, GameNightNominationsVotes, Wishlist, GameRatings
+from flask import request, func
 
 def nominate_game(game_night_id, user_id, game_id):
     """Handles nomination of a game for an upcoming game night."""
@@ -78,10 +78,11 @@ def get_nominate_game_page_context(game_night_id, current_user_id):
     game_night = GameNight.query.get_or_404(game_night_id)
 
     # Pull filters from the request
-    name_filter = request.args.get("name", "").strip()
-    players_filter = request.args.get("players", type=int)
-    playtime_filter = request.args.get("playtime", type=int)
+    name_filter = request.args.get("name", "").strip() if request.args.get("name_enabled") else None
+    players_filter = request.args.get("players", type=int) if request.args.get("players_enabled") else None
+    playtime_filter = request.args.get("playtime", type=int) if request.args.get("playtime_enabled") else None
 
+    # Fetch games based on filters
     raw_games = get_eligible_games_for_nomination(
         game_night_id,
         name_filter=name_filter,
@@ -97,19 +98,60 @@ def get_nominate_game_page_context(game_night_id, current_user_id):
         o.game_id for o in OwnedBy.query.filter_by(person_id=current_user_id).all()
     }
 
+    eligible_game_ids = {game.id for game in raw_games}
+
+    # Get player IDs attending the game night
+    player_people_ids = [
+        player.people_id
+        for player in Player.query.filter_by(game_night_id=game_night_id).all()
+    ]
+
+    # Fetch avg ratings for eligible games by players attending
+    avg_ratings_query = (
+        db.session.query(
+            GameRatings.game_id,
+            func.avg(GameRatings.ranking).label("avg_rating")
+        )
+        .filter(
+            GameRatings.person_id.in_(player_people_ids),
+            GameRatings.game_id.in_(eligible_game_ids)
+        )
+        .group_by(GameRatings.game_id)
+        .all()
+    )
+    
+    avg_ratings_by_game_id = {
+        game_id: round(avg_rating, 1) for game_id, avg_rating in avg_ratings_query
+    }
+
+    # Assemble eligible games list
     eligible_games = [
         {
             "game": game,
             "in_wishlist": game.id in wishlist_game_ids,
             "owned": game.id in owned_game_ids,
+            "avg_rating": avg_ratings_by_game_id.get(game.id)
         }
         for game in raw_games
     ]
 
-    current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=current_user_id).first()
+    # Optional: Sort by avg_rating descending, then name
+    eligible_games.sort(
+        key=lambda g: (-g["avg_rating"] if g["avg_rating"] is not None else float('inf'), g["game"].name.lower())
+    )
+
+    # Get current player's nomination (if any)
+    current_player = Player.query.filter_by(
+        game_night_id=game_night_id,
+        people_id=current_user_id
+    ).first()
+
     user_nomination_id = None
     if current_player:
-        nomination = GameNominations.query.filter_by(game_night_id=game_night_id, player_id=current_player.id).first()
+        nomination = GameNominations.query.filter_by(
+            game_night_id=game_night_id,
+            player_id=current_player.id
+        ).first()
         if nomination:
             user_nomination_id = nomination.game_id
 

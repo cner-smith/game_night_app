@@ -6,34 +6,54 @@ block content %}
 <button id="filter-toggle" class="button">Filters</button>
 <div id="filter-section" class="filters">
   <form method="GET">
-    <label for="name">Game Name:</label>
-    <input type="text" name="name" value="{{ filters.name }}" />
-
-    <label for="players">Number of Players:</label>
-    <input
-      id="players-slider"
-      type="range"
-      name="players"
-      min="1"
-      max="20"
-      step="1"
-      value="{{ filters.players or 4 }}"
-    />
-    <span id="players-value">{{ filters.players or 4 }}</span>
-
-    <label for="playtime">Maximum Playtime (minutes):</label>
-    <input
-      id="playtime-slider"
-      type="range"
-      name="playtime"
-      min="15"
-      max="300"
-      step="15"
-      value="{{ filters.playtime or 300 }}"
-    />
-    <span id="playtime-value">{{ filters.playtime or 300 }}</span>
-
-    <button type="submit">Apply Filters</button>
+    <div class="filter-group">
+      <input type="checkbox" id="name-filter-toggle" name="name_enabled" {% if filters.name %}checked{% endif %}>
+      <label for="name">Game Name:</label>
+      <input
+        type="text"
+        id="name"
+        name="name"
+        value="{{ filters.name }}"
+        {% if not filters.name %}disabled{% endif %}
+      />
+    </div>
+  
+    <div class="filter-group">
+      <input type="checkbox" id="players-filter-toggle" name="players_enabled" {% if filters.players is not none %}checked{% endif %}>
+      <label for="players-slider">Number of Players:</label>
+      <input
+        id="players-slider"
+        type="range"
+        name="players"
+        min="1"
+        max="20"
+        step="1"
+        value="{{ filters.players or 4 }}"
+        {% if filters.players is none %}disabled{% endif %}
+      />
+      <span id="players-value">{{ filters.players or 4 }}</span>
+    </div>
+  
+    <div class="filter-group">
+      <input type="checkbox" id="playtime-filter-toggle" name="playtime_enabled" {% if filters.playtime is not none %}checked{% endif %}>
+      <label for="playtime-slider">Maximum Playtime (minutes):</label>
+      <input
+        id="playtime-slider"
+        type="range"
+        name="playtime"
+        min="15"
+        max="300"
+        step="15"
+        value="{{ filters.playtime or 300 }}"
+        {% if filters.playtime is none %}disabled{% endif %}
+      />
+      <span id="playtime-value">{{ filters.playtime or 300 }}</span>
+    </div>
+  
+    <div class="filter-actions" style="margin-top: 10px;">
+      <button type="submit" class="button">Apply Filters</button>
+      <a href="{{ url_for('voting.nominate_game_page', game_night_id=game_night.id) }}" class="button" style="margin-left: 10px;">Reset Filters</a>
+    </div>
   </form>
 </div>
 
@@ -57,6 +77,11 @@ block content %}
             Players: {{ game.min_players or '?' }} - {{ game.max_players or '?'
             }}
           </p>
+          {% if item.avg_rating is not none %}
+            <p>Avg Rating: {{ item.avg_rating }}/10</p>
+          {% else %}
+            <p>Avg Rating: No ratings yet</p>
+          {% endif %}
 
           <div class="game-actions">
             <a
@@ -187,5 +212,33 @@ block content %}
         alert("An error occurred while adding to wishlist.");
       });
   }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    function setupToggle(toggleId, inputId) {
+      const toggle = document.getElementById(toggleId);
+      const input = document.getElementById(inputId);
+      toggle.addEventListener("change", () => {
+        input.disabled = !toggle.checked;
+      });
+    }
+
+    setupToggle("name-filter-toggle", "name");
+    setupToggle("players-filter-toggle", "players-slider");
+    setupToggle("playtime-filter-toggle", "playtime-slider");
+
+    // Sliders live update
+    const playersSlider = document.getElementById("players-slider");
+    const playersValue = document.getElementById("players-value");
+    playersSlider.addEventListener("input", () => {
+      playersValue.textContent = playersSlider.value;
+    });
+
+    const playtimeSlider = document.getElementById("playtime-slider");
+    const playtimeValue = document.getElementById("playtime-value");
+    playtimeSlider.addEventListener("input", () => {
+      playtimeValue.textContent = playtimeSlider.value;
+    });
+  });
+  
 </script>
 {% endblock %}
