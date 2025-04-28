@@ -64,8 +64,8 @@ def create_app():
     setup_database(app)
     register_blueprints(app)
 
-    # Start scheduler ONLY if we're in main process
-    if os.environ.get("SCHEDULER_ACTIVE") == "1" and os.environ.get("RUN_MAIN") == "true":
+    if os.environ.get("SCHEDULER_ACTIVE") == "1" and not os.environ.get("GUNICORN_WORKER_TMP_DIR"):
+        # Only main process (not workers) starts scheduler
         from app.services.reminders_services import start_scheduler
         start_scheduler(app)
 
