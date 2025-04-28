@@ -2,6 +2,7 @@ import logging
 from flask import Flask
 from flask_session import Session
 import os
+import multiprocessing
 
 # Import Config & Extensions
 from app.config import Config
@@ -64,8 +65,11 @@ def create_app():
     setup_database(app)
     register_blueprints(app)
 
+    # Only start the scheduler in *one* worker
     if os.environ.get("SCHEDULER_ACTIVE") == "1":
-        from app.services.reminders_services import start_scheduler
-        start_scheduler(app)
+        # Only allow scheduler if we are the "main" worker (lowest PID)
+        if os.getpid() == min(multiprocessing.active_children(), key=lambda p: p.pid).pid:
+            from app.services.reminders_services import start_scheduler
+            start_scheduler(app)
 
     return app
