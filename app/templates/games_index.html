@@ -17,6 +17,18 @@ block content %}
   <form method="GET">
 
     <div class="filter-group">
+      <input type="checkbox" id="name-filter-toggle" name="name_enabled" {% if request.args.get('name_enabled') %}checked{% endif %}>
+      <label for="name">Game Name:</label>
+      <input
+        type="text"
+        id="name"
+        name="name"
+        value="{{ request.args.get('name', '') }}"
+        {% if not request.args.get('name_enabled') %}disabled{% endif %}
+      />
+    </div>
+
+    <div class="filter-group">
       <input type="checkbox" id="players-filter-toggle" name="players_enabled" {% if request.args.get('players_enabled') %}checked{% endif %}>
       <label for="players-slider">Number of Players:</label>
       <input
@@ -147,15 +159,16 @@ block content %}
       document.getElementById("filter-section").classList.toggle("active");
     });
 
-    // Generic function to link a toggle and slider
-    function setupToggle(toggleId, sliderId) {
+    // Generic function to link a toggle and input/slider
+    function setupToggle(toggleId, inputId) {
       const toggle = document.getElementById(toggleId);
-      const slider = document.getElementById(sliderId);
+      const input = document.getElementById(inputId);
       toggle.addEventListener("change", () => {
-        slider.disabled = !toggle.checked;
+        input.disabled = !toggle.checked;
       });
     }
 
+    setupToggle("name-filter-toggle", "name");
     setupToggle("players-filter-toggle", "players-slider");
     setupToggle("playtime-filter-toggle", "playtime-slider");
     setupToggle("min-rating-filter-toggle", "min-rating-slider");
