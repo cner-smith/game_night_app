@@ -9,3 +9,4 @@ pytz
 apscheduler
 python-dotenv
 flask-session
+gunicorn
