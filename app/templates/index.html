@@ -7,23 +7,30 @@
 
 <!-- Calendar Navigation -->
 <div class="calendar-navigation">
-  <form action="{{ url_for('main.index') }}" method="GET" class="calendar__form">
-    <select name="month" onchange="this.form.submit()" class="form-control calendar__select">
-      {% for month_num, month_name in months %}
-      <option value="{{ month_num }}" {% if current_month.month == month_num %}selected{% endif %}>
-        {{ month_name }}
-      </option>
-      {% endfor %}
-    </select>
-    <select name="year" onchange="this.form.submit()" class="form-control calendar__select">
-      {% for year in years %}
-      <option value="{{ year }}" {% if current_month.year == year %}selected{% endif %}>
-        {{ year }}
-      </option>
-      {% endfor %}
-    </select>
-  </form>
-</div>
+    <form action="{{ url_for('main.index') }}" method="GET" class="calendar__form">
+      <div class="calendar__nav-controls">
+        <a href="{{ url_for('main.index', month=prev_month.month, year=prev_month.year) }}" class="calendar__arrow">&larr;</a>
+  
+        <select name="month" onchange="this.form.submit()" class="calendar__select">
+          {% for month_num, month_name in months %}
+          <option value="{{ month_num }}" {% if current_month.month == month_num %}selected{% endif %}>
+            {{ month_name }}
+          </option>
+          {% endfor %}
+        </select>
+  
+        <select name="year" onchange="this.form.submit()" class="calendar__select">
+          {% for year in years %}
+          <option value="{{ year }}" {% if current_month.year == year %}selected{% endif %}>
+            {{ year }}
+          </option>
+          {% endfor %}
+        </select>
+  
+        <a href="{{ url_for('main.index', month=next_month.month, year=next_month.year) }}" class="calendar__arrow">&rarr;</a>
+      </div>
+    </form>
+  </div>
 
 <div class="calendar">
   <table>
