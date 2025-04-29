@@ -433,24 +433,41 @@ ul {
 .game-nights {
   list-style: none;
   padding: 0;
-  margin: 20px 0;
+  margin: 20px auto;
+  max-width: 600px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 15px;
+  text-align: center;
 }
 
 .game-nights li {
   background-color: var(--light-color);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  padding: 12px 20px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
   transition: background-color 0.3s ease, transform 0.3s ease;
 }
 
 .game-nights li:hover {
   background-color: var(--tertiary-color);
   transform: translateY(-2px);
+}
+
+.game-night-card {
+  display: block;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 18px;
+  padding: 20px;
+  border-radius: 8px;
+  width: 100%;
+  height: 100%;
+}
+
+.game-night-card:hover {
+  color: var(--dark-color);
 }
 
 .game-nights a {
@@ -465,9 +482,9 @@ ul {
 }
 
 .empty-state {
-  text-align: center;
-  color: var(--text-color);
+  padding: 20px;
   font-style: italic;
+  color: var(--text-color);
 }
 
 /* ----------------------
