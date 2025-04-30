@@ -8,8 +8,7 @@
 <button id="filter-toggle" class="btn">Filters</button>
 <div id="filter-section" class="filters">
   <form method="GET">
-    <div class="filter-group">
-      <input type="checkbox" id="name-filter-toggle" name="name_enabled" {% if filters.name %}checked{% endif %}>
+    <div class="form-group">
       <label for="name">Game Name:</label>
       <input
         type="text"
@@ -17,40 +16,45 @@
         name="name"
         class="form-control"
         value="{{ filters.name }}"
-        {% if not filters.name %}disabled{% endif %}
       />
     </div>
-  
-    <div class="filter-group">
-      <input type="checkbox" id="players-filter-toggle" name="players_enabled" {% if filters.players is not none %}checked{% endif %}>
-      <label for="players-slider">Number of Players:</label>
-      <input
-        id="players-slider"
-        type="range"
-        name="players"
-        min="1"
-        max="20"
-        step="1"
-        value="{{ filters.players or 4 }}"
-        {% if filters.players is none %}disabled{% endif %}
-      />
-      <span id="players-value">{{ filters.players or 4 }}</span>
+
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="players-filter-toggle" name="players_enabled" {% if filters.players is not none %}checked{% endif %}>
+        Number of Players
+      </label>
+      <div id="players-slider-wrapper" class="{% if filters.players is none %}is-hidden{% endif %}">
+        <input
+          id="players-slider"
+          type="range"
+          name="players"
+          min="1"
+          max="20"
+          step="1"
+          value="{{ filters.players or 4 }}"
+        />
+        <span id="players-value">{{ filters.players or 4 }}</span>
+      </div>
     </div>
-  
-    <div class="filter-group">
-      <input type="checkbox" id="playtime-filter-toggle" name="playtime_enabled" {% if filters.playtime is not none %}checked{% endif %}>
-      <label for="playtime-slider">Maximum Playtime (minutes):</label>
-      <input
-        id="playtime-slider"
-        type="range"
-        name="playtime"
-        min="15"
-        max="300"
-        step="15"
-        value="{{ filters.playtime or 300 }}"
-        {% if filters.playtime is none %}disabled{% endif %}
-      />
-      <span id="playtime-value">{{ filters.playtime or 300 }}</span>
+
+    <div class="form-group">
+      <label>
+        <input type="checkbox" id="playtime-filter-toggle" name="playtime_enabled" {% if filters.playtime is not none %}checked{% endif %}>
+        Maximum Playtime (minutes)
+      </label>
+      <div id="playtime-slider-wrapper" class="{% if filters.playtime is none %}is-hidden{% endif %}">
+        <input
+          id="playtime-slider"
+          type="range"
+          name="playtime"
+          min="15"
+          max="300"
+          step="15"
+          value="{{ filters.playtime or 300 }}"
+        />
+        <span id="playtime-value">{{ filters.playtime or 300 }}</span>
+      </div>
     </div>
 
     <div class="filter-actions">
@@ -73,9 +77,11 @@
       {% set game = item.game %}
       <li class="game-list__item{% if user_nomination_id == game.id %} game-list__item--selected{% endif %}" data-game-id="{{ game.id }}">
         <div class="game-list__info">
-          <img src="{{ game.image_url }}" alt="{{ game.name }}" class="game-list__thumbnail" />
+          <a href="{{ url_for('games.view_game', game_id=game.id) }}">
+            <img src="{{ game.image_url }}" alt="{{ game.name }}" class="game-list__thumbnail" />
+          </a>
           <div class="game-list__info-content">
-            <a href="{{ url_for('games.view_game', game_id=game.id) }}" class="game-list__title">{{ game.name }}</a>
+            <strong class="game-list__title">{{ game.name }}</strong>
             <p class="game-list__description">Playtime: {{ game.playtime or 'N/A' }} minutes</p>
             <p class="game-list__description">Players: {{ game.min_players or '?' }} - {{ game.max_players or '?' }}</p>
             <p class="game-list__description">
@@ -111,9 +117,20 @@
 <!-- JavaScript -->
 <script>
   document.addEventListener("DOMContentLoaded", () => {
-    // Toggle Filters Section
     document.getElementById("filter-toggle").addEventListener("click", () => {
       document.getElementById("filter-section").classList.toggle("active");
+    });
+
+    const playersToggle = document.getElementById("players-filter-toggle");
+    const playersWrapper = document.getElementById("players-slider-wrapper");
+    playersToggle.addEventListener("change", () => {
+      playersWrapper.classList.toggle("is-hidden", !playersToggle.checked);
+    });
+
+    const playtimeToggle = document.getElementById("playtime-filter-toggle");
+    const playtimeWrapper = document.getElementById("playtime-slider-wrapper");
+    playtimeToggle.addEventListener("change", () => {
+      playtimeWrapper.classList.toggle("is-hidden", !playtimeToggle.checked);
     });
 
     document.getElementById("players-slider").addEventListener("input", (e) => {
@@ -147,18 +164,6 @@
         alert("Please select a game to nominate.");
       }
     });
-
-    function setupToggle(toggleId, inputId) {
-      const toggle = document.getElementById(toggleId);
-      const input = document.getElementById(inputId);
-      toggle.addEventListener("change", () => {
-        input.disabled = !toggle.checked;
-      });
-    }
-
-    setupToggle("name-filter-toggle", "name");
-    setupToggle("players-filter-toggle", "players-slider");
-    setupToggle("playtime-filter-toggle", "playtime-slider");
   });
 
   function toggleWishlist(gameId) {
