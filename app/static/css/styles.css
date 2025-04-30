@@ -1271,6 +1271,11 @@ input[type="checkbox"] {
   margin-top: 20px;
 }
 
+.attendee-form-section {
+  display: block;
+  margin-bottom: 20px;
+}
+
 /* Styled Table with banded rows */
 .styled-table {
   width: 100%;
