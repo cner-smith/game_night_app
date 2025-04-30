@@ -8,7 +8,6 @@ forgot password
 games index
 log results
 manage user
-nominate game
 signup
 start game night
 update password
