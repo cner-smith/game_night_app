@@ -191,11 +191,6 @@ ul {
   background-color: var(--danger-hover-color);
 }
 
-.btn--success:last-child,
-.btn--danger:last-child {
-  margin-bottom: 0;
-}
-
 /* Calendar */
 .calendar {
   max-width: 90%;
@@ -1291,7 +1286,8 @@ input[type="checkbox"] {
 }
 
 .styled-table thead {
-  background-color: var(--tertiary-color);
+  background-color: var(--primary-color);
+  color: var(--light-color);
 }
 
 .styled-table tbody tr:nth-child(even) {
