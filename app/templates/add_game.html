@@ -28,21 +28,21 @@
 </div>
 
 <!-- Form Section -->
-<form action="{{ url_for('games.add_game') }}" method="POST" class="auth-form">
-  <div class="form-group">
-    <label for="bgg_id">BGG ID (Preferred):</label>
-    <input type="number" id="bgg_id" name="bgg_id" class="form-control" placeholder="Enter BGG ID">
+<form action="{{ url_for('games.add_game') }}" method="POST" class="standard-form">
+    <div class="form-group">
+      <label for="bgg_id">BGG ID (Preferred):</label>
+      <input type="number" id="bgg_id" name="bgg_id" class="form-control" placeholder="Enter BGG ID">
+    </div>
+  
+    <div class="form-group">
+      <label for="name">Game Name (Optional):</label>
+      <input type="text" id="name" name="name" class="form-control" placeholder="Enter Game Name">
+    </div>
+  
+    <button type="submit" class="btn btn--success">Add Game</button>
+  </form>
+  
+  <div class="admin-panel__back-home">
+    <a href="{{ url_for('games.games_index') }}" class="btn btn--primary">Back to Games List</a>
   </div>
-
-  <div class="form-group">
-    <label for="name">Game Name (Optional):</label>
-    <input type="text" id="name" name="name" class="form-control" placeholder="Enter Game Name">
-  </div>
-
-  <button type="submit" class="btn btn--success">Add Game</button>
-</form>
-
-<div class="auth-links">
-  <a href="{{ url_for('games.games_index') }}">Back to Games List</a>
-</div>
 {% endblock %}
