@@ -1295,6 +1295,11 @@ input[type="checkbox"] {
   background-color: var(--tertiary-color);
 }
 
+.table--narrow {
+  max-width: 400px;
+  margin: 0 auto;
+}
+
 /* ==================================================
    9. Sticky Footer Controls
 ================================================== */

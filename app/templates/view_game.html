@@ -38,13 +38,26 @@
 </form>
 
 <h2>Leaderboard (Top 3 Players)</h2>
-<ul class="players-list">
-  {% for player, wins in leaderboard %}
-    <li>{{ player.person.first_name }} {{ player.person.last_name }} - {{ wins }} Wins</li>
-  {% else %}
-    <li>No leaderboard data available.</li>
-  {% endfor %}
-</ul>
+<table class="styled-table table--narrow">
+  <thead>
+    <tr>
+      <th>Place</th>
+      <th>Player</th>
+      <th>Wins</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for player, wins in leaderboard %}
+      <tr class="podium__place--{{ loop.index }}">
+        <td>{{ loop.index }}</td>
+        <td>{{ player.person.first_name }} {{ player.person.last_name }}</td>
+        <td>{{ wins }}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="3">No leaderboard data available.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
 
 <!-- <h2>Previous Results</h2>
 <ul>
