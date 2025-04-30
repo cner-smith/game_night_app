@@ -8,8 +8,6 @@ forgot password
 games index
 log results
 manage user
-signup
 start game night
-update password
 view game
 wishlist

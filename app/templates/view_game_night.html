@@ -25,26 +25,39 @@
       {% for gng in game_night_games %}
       <li class="game-list__item">
         <div class="game-list__info">
-          <img src="{{ gng.game_image_url }}" alt="{{ gng.game_name }}" class="game-list__thumbnail">
+          <a href="{{ url_for('games.view_game', game_id=gng.game_id) }}">
+            <img src="{{ gng.game_image_url }}" alt="{{ gng.game_name }}" class="game-list__thumbnail">
+          </a>
           <div class="game-list__info-content">
-            <a href="{{ url_for('games.view_game', game_id=gng.game_id) }}" class="game-list__title">{{ gng.game_name }}</a>
-            <p>Round {{ gng.round }}</p>
-            <p>Your Rating: {{ user_ratings_by_game_id.get(gng.game_id, 'Not Rated') }}/10</p>
+            <strong class="game-list__title">{{ gng.game_name }}</strong>
+  
+            <div class="game-list__meta">
+              <p>Round {{ gng.round }}</p>
+              <p>Your Rating: {{ user_ratings_by_game_id.get(gng.game_id, 'Not Rated') }}/10</p>
+            </div>
+  
             {% if not game_night.final and (current_user.admin or current_user.owner) %}
-              <a href="{{ url_for('game_night.log_results', game_night_id=game_night.id, game_night_game_id=gng.game_night_game_id) }}" class="btn btn--success">Log Results</a>
-              <form action="{{ url_for('game_night.manage_game_in_night', game_night_id=game_night.id) }}" method="POST" class="inline-form">
+            <div class="admin-controls">
+              <form action="{{ url_for('game_night.log_results', game_night_id=game_night.id, game_night_game_id=gng.game_night_game_id) }}" method="GET" class="form-inline">
+                <button type="submit" class="btn btn--success">Log Results</button>
+              </form>
+  
+              <form action="{{ url_for('game_night.manage_game_in_night', game_night_id=game_night.id) }}" method="POST" class="form-inline">
                 <input type="hidden" name="action" value="remove">
                 <input type="hidden" name="game_night_game_id" value="{{ gng.game_night_game_id }}">
                 <button type="submit" class="btn btn--danger">Remove Game</button>
               </form>
+  
               {% if gng.game_id not in owned_game_ids %}
-              <form action="{{ url_for('games.toggle_wishlist', game_id=gng.game_id) }}" method="POST" class="wishlist-form">
+              <form action="{{ url_for('games.toggle_wishlist', game_id=gng.game_id) }}" method="POST" class="form-inline">
                 <button type="submit" class="btn btn--success">
                   {% if gng.game_id in wishlist_game_ids %}Remove from Wishlist{% else %}Add to Wishlist{% endif %}
                 </button>
               </form>
               {% endif %}
+            </div>
             {% endif %}
+  
             <ul class="results-list">
               {% for result in gng.results %}
                 <li>
