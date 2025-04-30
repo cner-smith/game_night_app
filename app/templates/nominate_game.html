@@ -20,10 +20,8 @@
     </div>
 
     <div class="form-group">
-      <label>
-        <input type="checkbox" id="players-filter-toggle" name="players_enabled" {% if filters.players is not none %}checked{% endif %}>
-        Number of Players
-      </label>
+      <input type="checkbox" id="players-filter-toggle" name="players_enabled" {% if filters.players is not none %}checked{% endif %}>
+      <label for="players-slider">Players</label>
       <div id="players-slider-wrapper" class="{% if filters.players is none %}is-hidden{% endif %}">
         <input
           id="players-slider"
@@ -39,10 +37,8 @@
     </div>
 
     <div class="form-group">
-      <label>
-        <input type="checkbox" id="playtime-filter-toggle" name="playtime_enabled" {% if filters.playtime is not none %}checked{% endif %}>
-        Maximum Playtime (minutes)
-      </label>
+      <input type="checkbox" id="playtime-filter-toggle" name="playtime_enabled" {% if filters.playtime is not none %}checked{% endif %}>
+      <label for="playtime-slider">Playtime (Minutes)</label>
       <div id="playtime-slider-wrapper" class="{% if filters.playtime is none %}is-hidden{% endif %}">
         <input
           id="playtime-slider"
@@ -109,8 +105,8 @@
 
   <!-- Sticky Footer -->
   <div class="nominate-game-footer">
-    <button type="submit">Nominate Selected Game</button>
-    <a href="{{ url_for('game_night.view_game_night', game_night_id=game_night.id) }}" class="btn">Back to Game Night</a>
+    <button type="submit" class="btn"></button>Nominate Selected Game</button>
+    <a href="{{ url_for('game_night.view_game_night', game_night_id=game_night.id) }}" class="btn">Back</a>
   </div>
 </form>
 

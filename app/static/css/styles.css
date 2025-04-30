@@ -1174,7 +1174,16 @@ ul {
 ================================================== */
 
 .form-group {
-  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+}
+
+.form-group label {
+  margin: 0;
+  white-space: nowrap;
 }
 
 .form-control {
