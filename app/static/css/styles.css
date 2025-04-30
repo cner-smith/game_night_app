@@ -338,6 +338,34 @@ ul {
   margin-top: 4px;
 }
 
+/* Info Box */
+.info-box {
+  background-color: var(--light-color);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.info-box h3 {
+  margin-top: 0;
+  color: var(--dark-color);
+}
+
+.info-box a {
+  color: var(--primary-color);
+  text-decoration: none;
+}
+
+.info-box code {
+  background-color: #eee;
+  padding: 2px 5px;
+  border-radius: 4px;
+  display: inline-block;
+  margin: 4px 0;
+}
+
 /* Game List */
 .game-list {
   list-style: none;
