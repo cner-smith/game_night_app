@@ -95,7 +95,7 @@
           <p class="game-list__description">Max Players: {{ game.max_players or 'N/A' }}</p>
           <p class="game-list__description">Playtime: {{ game.playtime or 'N/A' }} minutes</p>
           <p class="game-list__description">
-            Your Rating: {{ item.user_rating if item.user_rating is not none else 'Not Rated' }}/10
+            Your Rating: {{ item.user_rating if item.user_rating is not none else 'Not Rated' }}
           </p>
 
           {% if not item.user_owns_game %}
