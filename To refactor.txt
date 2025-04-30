@@ -12,6 +12,5 @@ nominate game
 signup
 start game night
 update password
-view game night
 view game
 wishlist

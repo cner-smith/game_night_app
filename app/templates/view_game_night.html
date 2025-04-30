@@ -84,13 +84,6 @@
       <div class="votes-container">
         {% for nomination in nominations %}
         <div class="vote-option">
-          <a href="{{ url_for('games.view_game', game_id=nomination.game_id) }}">
-            <img src="{{ nomination.image_url }}" alt="{{ nomination.game_name }}" class="vote-option__thumbnail">
-          </a>
-          <strong>{{ nomination.game_name }}</strong>
-          <p>Your Rating: {{ user_ratings_by_game_id.get(nomination.game_id, 'Not Rated') }}/10</p>
-          <p>Avg Rating: {{ nomination.avg_rating or 'No ratings yet' }}/10</p>
-          <p>Votes: {{ nomination.vote_score or 0 }}</p>
           <label for="votes[{{ nomination.game_id }}]">Your Rank:</label>
           <select name="votes[{{ nomination.game_id }}]" class="vote-option__dropdown">
             <option value="">No Vote</option>
@@ -98,6 +91,15 @@
             <option value="{{ i }}" {% if user_votes.get(nomination.game_id) == i %}selected{% endif %}>{{ i }}</option>
             {% endfor %}
           </select>
+          <a href="{{ url_for('games.view_game', game_id=nomination.game_id) }}">
+            <img src="{{ nomination.image_url }}" alt="{{ nomination.game_name }}" class="vote-option__thumbnail">
+          </a>
+          <strong>{{ nomination.game_name }}</strong>
+          <div class="vote-option__meta">
+            <p>Your Rating: {{ user_ratings_by_game_id.get(nomination.game_id, 'Not Rated') }}</p>
+            <p>Avg Rating: {{ nomination.avg_rating or 'No ratings yet' }}</p>
+            <p>Votes: {{ nomination.vote_score or 0 }}</p>
+          </div>
         </div>
         {% endfor %}
       </div>
