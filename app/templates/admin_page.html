@@ -29,12 +29,18 @@
       {% for person in people %}
         <tr>
           <td>{{ person.first_name }} {{ person.last_name }}</td>
-          <td>{{ 'Yes' if person.admin else 'No' }}</td>
+          <td>
+            {% if person.owner %}
+              👑
+            {% elif person.admin %}
+              ⭐
+            {% endif %}
+          </td>
           <td class="admin-panel__actions">
             <!-- Admin Toggle -->
             <form action="{{ url_for('admin.toggle_admin_status', user_id=person.id) }}" method="POST" class="inline-form">
               <button type="submit" class="btn btn--primary">
-                {{ 'Demote from Admin' if person.admin else 'Promote to Admin' }}
+                {{ 'Demote' if person.admin else 'Promote' }}
               </button>
             </form>
 

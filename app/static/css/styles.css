@@ -704,6 +704,8 @@ ul {
   font-size: 14px;
   padding: 8px;
   border: 1px solid var(--border-color);
+  word-wrap: break-word;
+  white-space: normal;
 }
 
 .admin-panel__table th {
