@@ -167,6 +167,7 @@ ul {
 
 .btn--success {
   background-color: var(--success-color);
+  margin-top: 10px;
   margin-bottom: 10px;
 }
 
@@ -176,6 +177,7 @@ ul {
 
 .btn--danger {
   background-color: var(--danger-color);
+  margin-top: 10px;
   margin-bottom: 10px;
 }
 
@@ -402,6 +404,7 @@ ul {
   align-items: center;
   gap: 20px;
   margin-bottom: 20px;
+  padding: 0 10px;
 }
 
 .vote-option {
@@ -499,23 +502,6 @@ ul {
   font-size: 2rem;
   display: block;
   margin-bottom: 10px;
-}
-
-/* Admin Controls */
-.admin-controls {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.admin-controls .btn {
-  display: block;
-  width: 100%;
-  margin-bottom: 12px;
-}
-
-.admin-controls .btn:last-child {
-  margin-bottom: 0;
 }
 
 /* ==================================================
