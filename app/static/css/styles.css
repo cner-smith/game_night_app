@@ -1209,7 +1209,7 @@ ul {
 .add-game-to-night-footer button,
 .nominate-game-footer button,
 .nominate-game-footer .button,
-.add-game-to-night-footer .button {
+.add-game-to-night-footer a.btn {
   padding: 8px 16px;
   font-size: 16px;
   background-color: var(--primary-color);
@@ -1220,7 +1220,7 @@ ul {
   text-decoration: none;
 }
 
-.add-game-to-night-footer .button:hover,
+.add-game-to-night-footer a.btn:hover,
 .nominate-game-footer .button:hover,
 .add-game-to-night-footer button:hover,
 .nominate-game-footer button:hover {
