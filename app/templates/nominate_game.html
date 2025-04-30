@@ -1,9 +1,11 @@
-{% extends "base.html" %} {% block title %}Nominate a Game{% endblock %} {%
-block content %}
+{% extends "base.html" %}
+{% block title %}Nominate a Game{% endblock %}
+{% block content %}
+
 <h1>Nominate a Game for {{ game_night.date.strftime('%B %d, %Y') }}</h1>
 
 <!-- Filters -->
-<button id="filter-toggle" class="button">Filters</button>
+<button id="filter-toggle" class="btn">Filters</button>
 <div id="filter-section" class="filters">
   <form method="GET">
     <div class="filter-group">
@@ -13,6 +15,7 @@ block content %}
         type="text"
         id="name"
         name="name"
+        class="form-control"
         value="{{ filters.name }}"
         {% if not filters.name %}disabled{% endif %}
       />
@@ -49,10 +52,10 @@ block content %}
       />
       <span id="playtime-value">{{ filters.playtime or 300 }}</span>
     </div>
-  
-    <div class="filter-actions" style="margin-top: 10px;">
-      <button type="submit" class="button">Apply Filters</button>
-      <a href="{{ url_for('voting.nominate_game_page', game_night_id=game_night.id) }}" class="button" style="margin-left: 10px;">Reset Filters</a>
+
+    <div class="filter-actions">
+      <button type="submit" class="btn">Apply Filters</button>
+      <a href="{{ url_for('voting.nominate_game_page', game_night_id=game_night.id) }}" class="btn">Reset Filters</a>
     </div>
   </form>
 </div>
@@ -66,54 +69,33 @@ block content %}
   id="nominate-game-form"
 >
   <ul class="game-list">
-    {% for item in eligible_games %} {% set game = item.game %}
-    <li class="game-item" data-game-id="{{ game.id }}">
-      <div class="game-info">
-        <img src="{{ game.image_url }}" alt="{{ game.name }}" />
-        <div>
-          <strong>{{ game.name }}</strong>
-          <p>Playtime: {{ game.playtime or 'N/A' }} minutes</p>
-          <p>
-            Players: {{ game.min_players or '?' }} - {{ game.max_players or '?'
-            }}
-          </p>
-          {% if item.avg_rating is not none %}
-            <p>Avg Rating: {{ item.avg_rating }}/10</p>
-          {% else %}
-            <p>Avg Rating: No ratings yet</p>
-          {% endif %}
+    {% for item in eligible_games %}
+      {% set game = item.game %}
+      <li class="game-list__item{% if user_nomination_id == game.id %} game-list__item--selected{% endif %}" data-game-id="{{ game.id }}">
+        <div class="game-list__info">
+          <img src="{{ game.image_url }}" alt="{{ game.name }}" class="game-list__thumbnail" />
+          <div class="game-list__info-content">
+            <a href="{{ url_for('games.view_game', game_id=game.id) }}" class="game-list__title">{{ game.name }}</a>
+            <p class="game-list__description">Playtime: {{ game.playtime or 'N/A' }} minutes</p>
+            <p class="game-list__description">Players: {{ game.min_players or '?' }} - {{ game.max_players or '?' }}</p>
+            <p class="game-list__description">
+              {% if item.avg_rating is not none %}
+                Avg Rating: {{ item.avg_rating }}/10
+              {% else %}
+                Avg Rating: No ratings yet
+              {% endif %}
+            </p>
 
-          <div class="game-actions">
-            <a
-              href="{{ url_for('games.view_game', game_id=game.id) }}"
-              class="btn-view-game"
-            >
-              View Game Details
-            </a>
-
-            {% if not item.owned %} {% if item.in_wishlist %}
-            <button
-              type="button"
-              class="btn-wishlist-toggle"
-              onclick="toggleWishlist({{ game.id }})"
-            >
-              Remove from Wishlist
-            </button>
-            {% else %}
-            <button
-              type="button"
-              class="btn-wishlist-toggle"
-              onclick="toggleWishlist({{ game.id }})"
-            >
-              Add to Wishlist
-            </button>
-            {% endif %} {% endif %}
+            {% if not item.owned %}
+              <button type="button" class="btn btn--success btn-wishlist-toggle" onclick="toggleWishlist({{ game.id }})">
+                {% if item.in_wishlist %}Remove from Wishlist{% else %}Add to Wishlist{% endif %}
+              </button>
+            {% endif %}
           </div>
         </div>
-      </div>
-    </li>
+      </li>
     {% else %}
-    <li>No games available for nomination.</li>
+      <li class="empty-state">No games available for nomination.</li>
     {% endfor %}
   </ul>
 
@@ -122,12 +104,7 @@ block content %}
   <!-- Sticky Footer -->
   <div class="nominate-game-footer">
     <button type="submit">Nominate Selected Game</button>
-    <a
-      href="{{ url_for('game_night.view_game_night', game_night_id=game_night.id) }}"
-      class="button"
-    >
-      Back to Game Night
-    </a>
+    <a href="{{ url_for('game_night.view_game_night', game_night_id=game_night.id) }}" class="btn">Back to Game Night</a>
   </div>
 </form>
 
@@ -136,84 +113,41 @@ block content %}
   document.addEventListener("DOMContentLoaded", () => {
     // Toggle Filters Section
     document.getElementById("filter-toggle").addEventListener("click", () => {
-      const filterSection = document.getElementById("filter-section");
-      filterSection.classList.toggle("active");
+      document.getElementById("filter-section").classList.toggle("active");
     });
 
-    // Update Players Slider Value
-    const playersSlider = document.getElementById("players-slider");
-    const playersValue = document.getElementById("players-value");
-    playersSlider.addEventListener("input", () => {
-      playersValue.textContent = playersSlider.value;
+    document.getElementById("players-slider").addEventListener("input", (e) => {
+      document.getElementById("players-value").textContent = e.target.value;
     });
 
-    // Update Playtime Slider Value
-    const playtimeSlider = document.getElementById("playtime-slider");
-    const playtimeValue = document.getElementById("playtime-value");
-    playtimeSlider.addEventListener("input", () => {
-      playtimeValue.textContent = playtimeSlider.value;
+    document.getElementById("playtime-slider").addEventListener("input", (e) => {
+      document.getElementById("playtime-value").textContent = e.target.value;
     });
 
-    // Highlight previously selected nomination
     const selectedGameId = "{{ user_nomination_id or '' }}";
     if (selectedGameId) {
-      const previouslySelected = document.querySelector(
-        `.game-item[data-game-id="${selectedGameId}"]`
-      );
-      if (previouslySelected) {
-        previouslySelected.classList.add("selected");
+      const selectedItem = document.querySelector(`.game-list__item[data-game-id="${selectedGameId}"]`);
+      if (selectedItem) {
+        selectedItem.classList.add("game-list__item--selected");
         document.getElementById("selected-game-id").value = selectedGameId;
       }
     }
 
-    // Make each game item selectable
-    document.querySelectorAll(".game-item").forEach((item) => {
+    document.querySelectorAll(".game-list__item").forEach((item) => {
       item.addEventListener("click", () => {
-        document
-          .querySelectorAll(".game-item")
-          .forEach((i) => i.classList.remove("selected"));
-        item.classList.add("selected");
-        document.getElementById("selected-game-id").value =
-          item.getAttribute("data-game-id");
+        document.querySelectorAll(".game-list__item").forEach(i => i.classList.remove("game-list__item--selected"));
+        item.classList.add("game-list__item--selected");
+        document.getElementById("selected-game-id").value = item.dataset.gameId;
       });
     });
 
-    // Validate form submission
-    document
-      .getElementById("nominate-game-form")
-      .addEventListener("submit", (e) => {
-        if (!document.getElementById("selected-game-id").value) {
-          e.preventDefault();
-          alert("Please select a game to nominate.");
-        }
-      });
-  });
-
-  function addToWishlist(gameId) {
-    fetch(
-      "{{ url_for('games.toggle_wishlist', game_id=0) }}".replace("0", gameId),
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
+    document.getElementById("nominate-game-form").addEventListener("submit", (e) => {
+      if (!document.getElementById("selected-game-id").value) {
+        e.preventDefault();
+        alert("Please select a game to nominate.");
       }
-    )
-      .then((response) => {
-        if (response.ok) {
-          alert("Game added to wishlist!");
-          location.reload();
-        } else {
-          alert("Failed to add game to wishlist.");
-        }
-      })
-      .catch((error) => {
-        console.error("Error:", error);
-        alert("An error occurred while adding to wishlist.");
-      });
-  }
+    });
 
-  document.addEventListener("DOMContentLoaded", () => {
     function setupToggle(toggleId, inputId) {
       const toggle = document.getElementById(toggleId);
       const input = document.getElementById(inputId);
@@ -225,20 +159,24 @@ block content %}
     setupToggle("name-filter-toggle", "name");
     setupToggle("players-filter-toggle", "players-slider");
     setupToggle("playtime-filter-toggle", "playtime-slider");
-
-    // Sliders live update
-    const playersSlider = document.getElementById("players-slider");
-    const playersValue = document.getElementById("players-value");
-    playersSlider.addEventListener("input", () => {
-      playersValue.textContent = playersSlider.value;
-    });
-
-    const playtimeSlider = document.getElementById("playtime-slider");
-    const playtimeValue = document.getElementById("playtime-value");
-    playtimeSlider.addEventListener("input", () => {
-      playtimeValue.textContent = playtimeSlider.value;
-    });
   });
-  
+
+  function toggleWishlist(gameId) {
+    fetch("{{ url_for('games.toggle_wishlist', game_id=0) }}".replace("0", gameId), {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    })
+    .then((response) => {
+      if (response.ok) {
+        location.reload();
+      } else {
+        alert("Failed to update wishlist.");
+      }
+    })
+    .catch(() => {
+      alert("An error occurred while updating the wishlist.");
+    });
+  }
 </script>
+
 {% endblock %}
