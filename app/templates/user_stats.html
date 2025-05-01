@@ -1,53 +1,62 @@
 <!-- templates/user_stats.html -->
 
 {% extends "base.html" %} {% block content %}
-<h1>User Statistics</h1>
+<h1>Player Statistics</h1>
 
-<form method="get" action="{{ url_for('games.user_stats') }}">
-  <!-- Game Filter -->
-  <label for="game_ids">Games:</label>
-  <input
-    type="text"
-    id="game_ids"
-    name="game_ids"
-    placeholder="Enter game IDs separated by commas"
-  />
+<form method="get" class="filters">
+  <div class="form-group">
+    <label for="game_ids">Games:</label>
+    <input
+      type="text"
+      id="game_ids"
+      name="game_ids"
+      class="form-control"
+      placeholder="Enter game IDs separated by commas"
+      value="{{ request.args.get('game_ids', '') }}"
+    />
+  </div>
 
-  <!-- Opponent Filter -->
-  <label for="opponent_ids">Opponents:</label>
-  <input
-    type="text"
-    id="opponent_ids"
-    name="opponent_ids"
-    placeholder="Enter opponent IDs separated by commas"
-  />
+  <div class="form-group">
+    <label for="opponent_ids">Opponents:</label>
+    <input
+      type="text"
+      id="opponent_ids"
+      name="opponent_ids"
+      class="form-control"
+      placeholder="Enter opponent IDs separated by commas"
+      value="{{ request.args.get('opponent_ids', '') }}"
+    />
+  </div>
 
-  <!-- Date Filters -->
-  <label for="start_date">Start Date:</label>
-  <input type="date" id="start_date" name="start_date" />
+  <div class="form-group">
+    <label for="start_date">Start Date:</label>
+    <input
+      type="date"
+      id="start_date"
+      name="start_date"
+      class="form-control"
+      value="{{ request.args.get('start_date', '') }}"
+    />
+  </div>
 
-  <label for="end_date">End Date:</label>
-  <input type="date" id="end_date" name="end_date" />
+  <div class="form-group">
+    <label for="end_date">End Date:</label>
+    <input
+      type="date"
+      id="end_date"
+      name="end_date"
+      class="form-control"
+      value="{{ request.args.get('end_date', '') }}"
+    />
+  </div>
 
-  <!-- Sorting Options -->
-  <label for="sort_by">Sort By:</label>
-  <select id="sort_by" name="sort_by">
-    <option value="wins">Wins</option>
-    <option value="games_played">Games Played</option>
-    <option value="average_position">Average Position</option>
-    <option value="last_played">Last Played</option>
-  </select>
-
-  <label for="sort_order">Order:</label>
-  <select id="sort_order" name="sort_order">
-    <option value="desc">Descending</option>
-    <option value="asc">Ascending</option>
-  </select>
-
-  <button type="submit">Apply Filters</button>
+  <div class="filter-actions">
+    <button type="submit" class="btn">Apply Filters</button>
+    <a href="{{ url_for('games.user_stats') }}" class="btn">Clear Filters</a>
+  </div>
 </form>
 
-<table class="stats-table">
+<table class="styled-table">
   <thead>
     <tr>
       {% for col, label in [ ('game_name', 'Game'), ('games_played', 'Plays'),
@@ -86,6 +95,4 @@
     {% endfor %}
   </tbody>
 </table>
-<p>sort_by: {{ sort_by }}</p>
-<p>sort_order: {{ sort_order }}</p>
 {% endblock %}
