@@ -27,6 +27,7 @@ def register_blueprints(app):
     app.register_blueprint(blueprints.reminders_bp)
     app.register_blueprint(blueprints.main_bp)
     app.register_blueprint(blueprints.test_bp)
+    app.register_blueprint(blueprints.api_bp)
 
 
 def setup_logging():

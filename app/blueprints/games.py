@@ -4,6 +4,8 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
 from app.services import games_services
 from app.utils import admin_required
+from app.services import index_services
+from datetime import date
 
 games_bp = Blueprint("games", __name__)
 
@@ -157,6 +159,13 @@ def user_stats():
     end_date = request.args.get("end_date")
     sort_by = request.args.get("sort_by", "wins")
     sort_order = request.args.get("sort_order", "desc")
+
+    if not start_date:
+        earliest = index_services.get_earliest_game_night()
+        start_date = earliest.isoformat() if earliest else ""
+
+    if not end_date:
+        end_date = date.today().isoformat()
 
     # Fetch user statistics based on filters
     stats = games_services.get_user_stats(

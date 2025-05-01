@@ -1,8 +1,7 @@
 from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex, Person, GameRatings
-from sqlalchemy import func, distinct, case, and_
+from sqlalchemy import func, distinct, case
 from app.utils import fetch_and_parse_bgg_data
 from datetime import datetime
-
 
 def get_or_create_game(game_name, bgg_id=None):
     """Retrieve a game from the database by name or BGG ID, or create it if not found."""

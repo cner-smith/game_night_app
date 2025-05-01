@@ -86,3 +86,101 @@
   </tbody>
 </table>
 {% endblock %}
+
+<script>
+  function setupAutocomplete(inputId, tagContainerId, hiddenInputId, apiUrl) {
+    const input = document.getElementById(inputId);
+    const tagContainer = document.getElementById(tagContainerId);
+    const hiddenInput = document.getElementById(hiddenInputId);
+
+    let selectedItems = [];
+
+    input.addEventListener("input", async () => {
+      const query = input.value.trim();
+      if (query.length < 2) return;
+
+      const response = await fetch(`${apiUrl}?q=${encodeURIComponent(query)}`);
+      const results = await response.json();
+
+      let dropdown = document.getElementById(`${inputId}-dropdown`);
+      if (!dropdown) {
+        dropdown = document.createElement("div");
+        dropdown.id = `${inputId}-dropdown`;
+        dropdown.classList.add("autocomplete-dropdown");
+        input.parentNode.appendChild(dropdown);
+      }
+
+      dropdown.innerHTML = "";
+      results.forEach((item) => {
+        if (selectedItems.some((sel) => sel.id === item.id)) return;
+
+        const option = document.createElement("div");
+        option.textContent = item.name;
+        option.classList.add("autocomplete-option");
+        option.addEventListener("click", () => {
+          selectedItems.push(item);
+          renderTags();
+          input.value = "";
+          dropdown.innerHTML = "";
+        });
+        dropdown.appendChild(option);
+      });
+    });
+
+    function renderTags() {
+      tagContainer.innerHTML = "";
+      // Remove all prior hidden inputs
+      hiddenInput.parentNode
+        .querySelectorAll(`input[name="${hiddenInput.name}"]`)
+        .forEach((e) => e.remove());
+
+      selectedItems.forEach((item) => {
+        const tag = document.createElement("span");
+        tag.classList.add("tag");
+        tag.textContent = item.name;
+
+        const removeBtn = document.createElement("button");
+        removeBtn.textContent = "×";
+        removeBtn.type = "button";
+        removeBtn.addEventListener("click", () => {
+          selectedItems = selectedItems.filter((i) => i.id !== item.id);
+          renderTags();
+        });
+
+        tag.appendChild(removeBtn);
+        tagContainer.appendChild(tag);
+
+        // Append individual hidden input for Flask
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = hiddenInput.name;
+        hidden.value = item.id;
+        hiddenInput.parentNode.appendChild(hidden);
+      });
+
+      hiddenInput.value = ""; // prevent fallback value
+    }
+
+    document.addEventListener("click", (e) => {
+      if (!input.contains(e.target)) {
+        const dropdown = document.getElementById(`${inputId}-dropdown`);
+        if (dropdown) dropdown.remove();
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    setupAutocomplete(
+      "game-search",
+      "game-tags",
+      "game_ids",
+      "/api/games/autocomplete"
+    );
+    setupAutocomplete(
+      "opponent-search",
+      "opponent-tags",
+      "opponent_ids",
+      "/api/people/autocomplete"
+    );
+  });
+</script>
