@@ -64,115 +64,111 @@ block content %}
 </form>
 
 <script>
-  function setupTagAutocomplete(
-    inputId,
-    tagContainerId,
-    hiddenInputName,
-    allItems
-  ) {
+  document.addEventListener("DOMContentLoaded", async () => {
+    const games = await fetch("/games/autocomplete").then((r) => r.json());
+    const opponents = await fetch("/people/autocomplete").then((r) => r.json());
+
+    setupTagSearch("game-search", "game-tags", "game_ids", games);
+    setupTagSearch(
+      "opponent-search",
+      "opponent-tags",
+      "opponent_ids",
+      opponents
+    );
+  });
+
+  function setupTagSearch(inputId, tagContainerId, hiddenName, allItems) {
     const input = document.getElementById(inputId);
     const tagContainer = document.getElementById(tagContainerId);
     const form = input.closest("form");
-
     let selected = [];
-    let filtered = [...allItems];
-    let highlightedIndex = 0;
+    let matchIndex = 0;
 
-    input.addEventListener("input", () => {
-      const query = input.value.toLowerCase().trim();
-      filtered = allItems.filter((i) => i.name.toLowerCase().includes(query));
-      renderDropdown();
-    });
+    input.addEventListener("input", () => renderSuggestion());
 
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        const selectedItem = filtered[highlightedIndex];
-        if (selectedItem && !selected.some((s) => s.id === selectedItem.id)) {
+        const matches = getMatches();
+        const selectedItem = matches[matchIndex];
+        if (selectedItem && !selected.some((i) => i.id === selectedItem.id)) {
           selected.push(selectedItem);
           input.value = "";
           renderTags();
-          renderDropdown();
+          clearSuggestion();
         }
       }
     });
 
-    function renderDropdown() {
-      let dropdown = document.getElementById(`${inputId}-dropdown`);
-      if (!dropdown) {
-        dropdown = document.createElement("div");
-        dropdown.id = `${inputId}-dropdown`;
-        dropdown.classList.add("autocomplete-dropdown");
-        input.insertAdjacentElement("afterend", dropdown);
-      }
-      dropdown.innerHTML = "";
+    function getMatches() {
+      const q = input.value.toLowerCase().trim();
+      return allItems.filter((i) => i.name.toLowerCase().includes(q));
+    }
 
-      if (filtered.length > 0 && input.value.length >= 1) {
-        const item = filtered[0];
-        const div = document.createElement("div");
-        div.textContent = item.name;
-        div.classList.add("autocomplete-option");
-        div.addEventListener("click", () => {
-          selected.push(item);
-          input.value = "";
-          renderTags();
-          dropdown.innerHTML = "";
-        });
-        dropdown.appendChild(div);
-      }
+    function renderSuggestion() {
+      clearSuggestion();
+
+      const matches = getMatches();
+      if (matches.length === 0 || input.value.length < 1) return;
+
+      const suggestionBox = document.createElement("div");
+      suggestionBox.className = "autocomplete-dropdown";
+      suggestionBox.id = `${inputId}-dropdown`;
+
+      const item = matches[0];
+      const option = document.createElement("div");
+      option.className = "autocomplete-option";
+      option.textContent = item.name;
+      option.addEventListener("click", () => {
+        selected.push(item);
+        input.value = "";
+        renderTags();
+        clearSuggestion();
+      });
+
+      suggestionBox.appendChild(option);
+      input.parentNode.appendChild(suggestionBox);
+    }
+
+    function clearSuggestion() {
+      const box = document.getElementById(`${inputId}-dropdown`);
+      if (box) box.remove();
     }
 
     function renderTags() {
       tagContainer.innerHTML = "";
       form
-        .querySelectorAll(`input[name="${hiddenInputName}"]`)
-        .forEach((i) => i.remove());
+        .querySelectorAll(`input[name="${hiddenName}"]`)
+        .forEach((e) => e.remove());
 
       selected.forEach((item) => {
         const tag = document.createElement("span");
-        tag.classList.add("tag");
+        tag.className = "tag";
         tag.textContent = item.name;
 
-        const removeBtn = document.createElement("button");
-        removeBtn.textContent = "×";
-        removeBtn.type = "button";
-        removeBtn.addEventListener("click", () => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.textContent = "×";
+        btn.addEventListener("click", () => {
           selected = selected.filter((i) => i.id !== item.id);
           renderTags();
         });
 
-        tag.appendChild(removeBtn);
+        tag.appendChild(btn);
         tagContainer.appendChild(tag);
 
-        const hiddenInput = document.createElement("input");
-        hiddenInput.type = "hidden";
-        hiddenInput.name = hiddenInputName;
-        hiddenInput.value = item.id;
-        form.appendChild(hiddenInput);
+        const hidden = document.createElement("input");
+        hidden.type = "hidden";
+        hidden.name = hiddenName;
+        hidden.value = item.id;
+        form.appendChild(hidden);
       });
     }
 
+    // Click-away behavior
     document.addEventListener("click", (e) => {
-      if (!input.contains(e.target)) {
-        const dropdown = document.getElementById(`${inputId}-dropdown`);
-        if (dropdown) dropdown.remove();
-      }
+      if (!input.contains(e.target)) clearSuggestion();
     });
   }
-
-  document.addEventListener("DOMContentLoaded", async () => {
-    const gameList = await fetch("/games/autocomplete").then((r) => r.json());
-    const personList = await fetch("/people/autocomplete").then((r) =>
-      r.json()
-    );
-
-    setupTagAutocomplete("game-search", "game-tags", "game_ids", gameList);
-    setupTagAutocomplete(
-      "opponent-search",
-      "opponent-tags",
-      "opponent_ids",
-      personList
-    );
-  });
 </script>
 {% endblock %}
