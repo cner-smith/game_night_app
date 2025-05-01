@@ -1348,6 +1348,13 @@ input[type="checkbox"] {
   background-color: var(--tertiary-color);
 }
 
+.autocomplete-suggestion {
+  margin-top: 4px;
+  font-style: italic;
+  color: var(--text-color);
+  font-size: 14px;
+}
+
 .tag {
   display: inline-block;
   background-color: var(--secondary-color);

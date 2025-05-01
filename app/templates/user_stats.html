@@ -14,6 +14,7 @@ block content %}
     />
     <div id="gameTags" class="selected-tags"></div>
   </div>
+  <div id="gameSuggestion" class="autocomplete-suggestion"></div>
 
   <div class="form-group">
     <label for="opponentSearch">Opponents:</label>
@@ -26,6 +27,7 @@ block content %}
     />
     <div id="opponentTags" class="selected-tags"></div>
   </div>
+  <div id="opponentSuggestion" class="autocomplete-suggestion"></div>
 
   <div class="form-group">
     <label for="start_date">Start Date:</label>
@@ -103,36 +105,33 @@ block content %}
     return data.length > 0 ? data[0] : null;
   }
 
+  async function fetchByIds(apiUrl, ids) {
+    if (!ids.length) return [];
+    const res = await fetch(`${apiUrl}?ids=${ids.join(",")}`);
+    return await res.json();
+  }
+
   function setupInlineAutocomplete(
     searchBoxId,
     tagsContainerId,
     inputName,
-    apiUrl
+    apiUrl,
+    suggestionBoxId
   ) {
     const searchBox = document.getElementById(searchBoxId);
     const tagsContainer = document.getElementById(tagsContainerId);
+    const suggestionBox = document.getElementById(suggestionBoxId);
     const form = document.getElementById("userStatsForm");
     const selected = new Map();
+    let topMatch = null;
 
-    let previewItem = null;
-    const previewBox = document.createElement("div");
-    previewBox.className = "autocomplete-preview";
-    previewBox.style.fontSize = "0.9rem";
-    previewBox.style.color = "#666";
-    previewBox.style.marginTop = "4px";
-    searchBox.insertAdjacentElement("afterend", previewBox);
-
-    async function updatePreview() {
+    async function updateSuggestion() {
       const query = searchBox.value.trim();
-      previewItem = await fetchTopMatch(apiUrl, query);
-      if (previewItem) {
-        previewBox.textContent = `Will add: ${previewItem.name}`;
-      } else {
-        previewBox.textContent = "";
-      }
+      topMatch = await fetchTopMatch(apiUrl, query);
+      suggestionBox.textContent = topMatch ? topMatch.name : "";
     }
 
-    function renderTags() {
+    async function renderTags() {
       tagsContainer.innerHTML = "";
       [...selected.values()].forEach((item) => {
         const tag = document.createElement("span");
@@ -145,6 +144,7 @@ block content %}
         remove.onclick = () => {
           selected.delete(item.id);
           renderTags();
+          form.submit(); // auto-submit when removing
         };
 
         tag.appendChild(remove);
@@ -158,24 +158,31 @@ block content %}
       });
     }
 
-    searchBox.addEventListener("input", updatePreview);
+    searchBox.addEventListener("input", updateSuggestion);
 
     searchBox.addEventListener("keydown", async (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        const query = searchBox.value.trim();
-        if (!previewItem) {
-          previewItem = await fetchTopMatch(apiUrl, query);
-        }
-        if (previewItem && !selected.has(previewItem.id)) {
-          selected.set(previewItem.id, previewItem);
-          renderTags();
+        if (topMatch && !selected.has(topMatch.id)) {
+          selected.set(topMatch.id, topMatch);
           searchBox.value = "";
-          previewBox.textContent = "";
-          form.submit(); // ✅ Immediately apply filters
+          topMatch = null;
+          suggestionBox.textContent = "";
+          await renderTags();
+          form.submit();
         }
       }
     });
+
+    // Rehydrate existing tags
+    (async () => {
+      const selectedIds = JSON.parse(searchBox.dataset.selected || "[]");
+      if (selectedIds.length > 0) {
+        const items = await fetchByIds(apiUrl, selectedIds);
+        items.forEach((item) => selected.set(item.id, item));
+        renderTags();
+      }
+    })();
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -183,13 +190,15 @@ block content %}
       "gameSearch",
       "gameTags",
       "game_ids",
-      "/games/autocomplete"
+      "/games/autocomplete",
+      "gameSuggestion"
     );
     setupInlineAutocomplete(
       "opponentSearch",
       "opponentTags",
       "opponent_ids",
-      "/people/autocomplete"
+      "/people/autocomplete",
+      "opponentSuggestion"
     );
   });
 </script>
