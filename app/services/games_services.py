@@ -288,7 +288,8 @@ def get_user_stats(user_id, game_ids=None, opponent_ids=None, start_date=None, e
         "wins": func.sum(case((Result.position == 1, 1), else_=0)).label("wins"),
         "games_played": func.count(Result.id),
         "average_position": func.avg(Result.position),
-        "last_played": func.max(GameNightGame.created_at)
+        "last_played": func.max(GameNightGame.created_at),
+        "game_name": Game.name
     }.get(sort_by, func.sum(case((Result.position == 1, 1), else_=0)).label("wins"))
 
     if sort_order == "asc":

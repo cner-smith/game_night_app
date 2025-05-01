@@ -169,5 +169,6 @@ def user_stats():
         sort_order=sort_order
     )
 
-    return render_template("user_stats.html", stats=stats)
+    return render_template("user_stats.html", stats=stats,
+                       sort_by=sort_by, sort_order=sort_order)
 
