@@ -1,5 +1,5 @@
 from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex, Person, GameRatings
-from sqlalchemy import func, distinct, case
+from sqlalchemy import func, distinct, case, and_
 from app.utils import fetch_and_parse_bgg_data
 from datetime import datetime
 
@@ -285,11 +285,11 @@ def get_user_stats(user_id, game_ids=None, opponent_ids=None, start_date=None, e
 
     # Apply sorting
     sort_column = {
-        "wins": func.sum(func.case([(Result.position == 1, 1)], else_=0)),
+        "wins": func.sum(case((Result.position == 1, 1), else_=0)).label("wins"),
         "games_played": func.count(Result.id),
         "average_position": func.avg(Result.position),
         "last_played": func.max(GameNightGame.created_at)
-    }.get(sort_by, func.sum(func.case([(Result.position == 1, 1)], else_=0)))
+    }.get(sort_by, func.sum(case((Result.position == 1, 1), else_=0)).label("wins"))
 
     if sort_order == "asc":
         query = query.order_by(sort_column.asc())
