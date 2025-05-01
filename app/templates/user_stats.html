@@ -1,29 +1,30 @@
-<!-- templates/user_stats.html -->
-
-{% extends "base.html" %} {% block content %}
+{% extends "base.html" %} {% block title %}Player Statistics{% endblock %} {%
+block content %}
 <h1>Player Statistics</h1>
 
-<form method="get" class="filters-panel">
+<form method="get" class="filters-panel" id="userStatsForm">
   <div class="form-group">
-    <label for="game-search">Games:</label>
-    <div class="autocomplete-wrapper">
-      <input type="text" id="game-search" placeholder="Search games..." />
-      <div id="game-tags" class="selected-tags"></div>
-      <input type="hidden" name="game_ids" id="game_ids" />
-    </div>
+    <label for="gameSearch">Games:</label>
+    <input
+      type="text"
+      id="gameSearch"
+      class="form-control"
+      placeholder="Search for a game..."
+      autocomplete="off"
+    />
+    <div id="gameTags" class="selected-tags"></div>
   </div>
 
   <div class="form-group">
-    <label for="opponent-search">Opponents:</label>
-    <div class="autocomplete-wrapper">
-      <input
-        type="text"
-        id="opponent-search"
-        placeholder="Search opponents..."
-      />
-      <div id="opponent-tags" class="selected-tags"></div>
-      <input type="hidden" name="opponent_ids" id="opponent_ids" />
-    </div>
+    <label for="opponentSearch">Opponents:</label>
+    <input
+      type="text"
+      id="opponentSearch"
+      class="form-control"
+      placeholder="Search for an opponent..."
+      autocomplete="off"
+    />
+    <div id="opponentTags" class="selected-tags"></div>
   </div>
 
   <div class="form-group">
@@ -96,100 +97,76 @@
 {% endblock %}
 
 <script>
-  function setupAutocomplete(inputId, tagContainerId, hiddenInputId, apiUrl) {
-    const input = document.getElementById(inputId);
-    const tagContainer = document.getElementById(tagContainerId);
-    const hiddenInput = document.getElementById(hiddenInputId);
+  async function fetchTopMatch(apiUrl, query) {
+    if (!query || query.length < 1) return null;
+    const res = await fetch(`${apiUrl}?q=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    return data.length > 0 ? data[0] : null;
+  }
 
-    let selectedItems = [];
-
-    input.addEventListener("input", async () => {
-      const query = input.value.trim();
-      if (query.length < 2) return;
-
-      const response = await fetch(`${apiUrl}?q=${encodeURIComponent(query)}`);
-      const results = await response.json();
-
-      let dropdown = document.getElementById(`${inputId}-dropdown`);
-      if (!dropdown) {
-        dropdown = document.createElement("div");
-        dropdown.id = `${inputId}-dropdown`;
-        dropdown.classList.add("autocomplete-dropdown");
-        input.insertAdjacentElement("afterend", dropdown);
-      }
-
-      dropdown.innerHTML = "";
-      results.forEach((item) => {
-        if (selectedItems.some((sel) => sel.id === item.id)) return;
-
-        const option = document.createElement("div");
-        option.textContent = item.name;
-        option.classList.add("autocomplete-option");
-        option.addEventListener("click", () => {
-          selectedItems.push(item);
-          renderTags();
-          input.value = "";
-          dropdown.innerHTML = "";
-        });
-        dropdown.appendChild(option);
-      });
-    });
+  function setupInlineAutocomplete(
+    searchBoxId,
+    tagsContainerId,
+    inputName,
+    apiUrl
+  ) {
+    const searchBox = document.getElementById(searchBoxId);
+    const tagsContainer = document.getElementById(tagsContainerId);
+    const selected = new Map();
 
     function renderTags() {
-      tagContainer.innerHTML = "";
-      // Remove all prior hidden inputs
-      hiddenInput.parentNode
-        .querySelectorAll(`input[name="${hiddenInput.name}"]`)
-        .forEach((e) => e.remove());
-
-      selectedItems.forEach((item) => {
+      tagsContainer.innerHTML = "";
+      [...selected.values()].forEach((item) => {
         const tag = document.createElement("span");
-        tag.classList.add("tag");
+        tag.className = "tag";
         tag.textContent = item.name;
 
-        const removeBtn = document.createElement("button");
-        removeBtn.textContent = "×";
-        removeBtn.type = "button";
-        removeBtn.addEventListener("click", () => {
-          selectedItems = selectedItems.filter((i) => i.id !== item.id);
+        const remove = document.createElement("button");
+        remove.textContent = "×";
+        remove.type = "button";
+        remove.onclick = () => {
+          selected.delete(item.id);
           renderTags();
-        });
+        };
 
-        tag.appendChild(removeBtn);
-        tagContainer.appendChild(tag);
+        tag.appendChild(remove);
+        tagsContainer.appendChild(tag);
 
-        // Append individual hidden input for Flask
         const hidden = document.createElement("input");
         hidden.type = "hidden";
-        hidden.name = hiddenInput.name;
+        hidden.name = inputName;
         hidden.value = item.id;
-        hiddenInput.parentNode.appendChild(hidden);
+        tagsContainer.appendChild(hidden);
       });
-
-      hiddenInput.value = ""; // prevent fallback value
     }
 
-    document.addEventListener("click", (e) => {
-      const wrapper = input.closest(".autocomplete-wrapper");
-      if (!wrapper.contains(e.target)) {
-        const dropdown = document.getElementById(`${inputId}-dropdown`);
-        if (dropdown) dropdown.remove();
+    searchBox.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const query = searchBox.value.trim();
+        const topMatch = await fetchTopMatch(apiUrl, query);
+        if (topMatch && !selected.has(topMatch.id)) {
+          selected.set(topMatch.id, topMatch);
+          renderTags();
+          searchBox.value = "";
+        }
       }
     });
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    setupAutocomplete(
-      "game-search",
-      "game-tags",
+    setupInlineAutocomplete(
+      "gameSearch",
+      "gameTags",
       "game_ids",
       "/games/autocomplete"
     );
-    setupAutocomplete(
-      "opponent-search",
-      "opponent-tags",
+    setupInlineAutocomplete(
+      "opponentSearch",
+      "opponentTags",
       "opponent_ids",
       "/people/autocomplete"
     );
   });
 </script>
+{% endblock %}
