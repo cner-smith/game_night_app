@@ -170,7 +170,8 @@
     }
 
     document.addEventListener("click", (e) => {
-      if (!input.contains(e.target)) {
+      const wrapper = input.closest(".autocomplete-wrapper");
+      if (!wrapper.contains(e.target)) {
         const dropdown = document.getElementById(`${inputId}-dropdown`);
         if (dropdown) dropdown.remove();
       }
