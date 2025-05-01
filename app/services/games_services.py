@@ -1,5 +1,5 @@
 from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex, Person, GameRatings
-from sqlalchemy import func, distinct
+from sqlalchemy import func, distinct, case
 from app.utils import fetch_and_parse_bgg_data
 from datetime import datetime
 
@@ -242,7 +242,7 @@ def get_user_stats(user_id, game_ids=None, opponent_ids=None, start_date=None, e
         GameNightGame.game_id,
         Game.name.label("game_name"),
         func.count(Result.id).label("games_played"),
-        func.sum(func.case([(Result.position == 1, 1)], else_=0)).label("wins"),
+        func.sum(case((Result.position == 1, 1), else_=0)).label("wins"),
         func.avg(Result.position).label("average_position"),
         func.max(GameNightGame.created_at).label("last_played")
     ).join(Result, GameNightGame.id == Result.game_night_game_id
