@@ -64,111 +64,145 @@ block content %}
 </form>
 
 <script>
-  document.addEventListener("DOMContentLoaded", async () => {
-    const games = await fetch("/games/autocomplete").then((r) => r.json());
-    const opponents = await fetch("/people/autocomplete").then((r) => r.json());
+  const people = [
+    {% for person in people %}
+      { id: {{ person.id }}, name: "{{ person.first_name }} {{ person.last_name }}" },
+    {% endfor %}
+  ];
 
-    setupTagSearch("game-search", "game-tags", "game_ids", games);
-    setupTagSearch(
-      "opponent-search",
-      "opponent-tags",
-      "opponent_ids",
-      opponents
-    );
+  let filteredPeople = [...people];
+  let currentPage = 1;
+  const pageSize = 25;
+  let highlightedIndex = 0;
+  const selectedPeople = new Set();
+
+  const attendeesContainer = document.getElementById('attendeesContainer');
+  const searchBox = document.getElementById('searchBox');
+  const pageInfo = document.getElementById('pageInfo');
+  const prevPage = document.getElementById('prevPage');
+  const nextPage = document.getElementById('nextPage');
+
+  function updateSelectedCount() {
+    const count = selectedPeople.size;
+    document.getElementById('selectedCount').textContent = `${count} Attendee${count !== 1 ? 's' : ''} Selected`;
+  }
+
+  function renderAttendees() {
+    attendeesContainer.innerHTML = '';
+    const start = (currentPage - 1) * pageSize;
+    const pagePeople = filteredPeople.slice(start, start + pageSize);
+
+    if (pagePeople.length === 0 && currentPage > 1) {
+      currentPage--;
+      renderAttendees();
+      return;
+    }
+
+    pagePeople.forEach((person, index) => {
+      const label = document.createElement('label');
+      label.className = 'attendee__label';
+      label.dataset.index = index;
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.name = 'attendees';
+      checkbox.value = person.id;
+      checkbox.className = 'attendee__checkbox';
+
+      if (selectedPeople.has(person.id)) {
+        checkbox.checked = true;
+        label.classList.add('attendee__label--selected');
+      }
+
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) selectedPeople.add(person.id);
+        else selectedPeople.delete(person.id);
+        updateSelectedCount();
+        renderAttendees();
+      });
+
+      label.appendChild(checkbox);
+      label.appendChild(document.createTextNode(' ' + person.name));
+      attendeesContainer.appendChild(label);
+    });
+
+    pageInfo.textContent = `Page ${currentPage} of ${Math.ceil(filteredPeople.length / pageSize)}`;
+    highlightTopMatch();
+    updateSelectedCount();
+  }
+
+  function updateFilter() {
+    const searchTerm = searchBox.value.toLowerCase();
+    filteredPeople = people.filter(person => person.name.toLowerCase().includes(searchTerm));
+    currentPage = 1;
+    highlightedIndex = 0;
+    renderAttendees();
+  }
+
+  function highlightTopMatch() {
+    const labels = attendeesContainer.querySelectorAll('.attendee__label');
+    labels.forEach(label => {
+      label.classList.toggle('attendee__label--selected', selectedPeople.has(+label.querySelector('input').value));
+      label.classList.remove('attendee__label--highlighted');
+    });
+    if (labels[highlightedIndex]) {
+      labels[highlightedIndex].scrollIntoView({ block: "nearest" });
+      labels[highlightedIndex].classList.add('attendee__label--highlighted');
+    }
+  }
+
+  searchBox.addEventListener('input', updateFilter);
+
+  prevPage.addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      highlightedIndex = 0;
+      renderAttendees();
+    }
   });
 
-  function setupTagSearch(inputId, tagContainerId, hiddenName, allItems) {
-    const input = document.getElementById(inputId);
-    const tagContainer = document.getElementById(tagContainerId);
-    const form = input.closest("form");
-    let selected = [];
-    let matchIndex = 0;
+  nextPage.addEventListener('click', () => {
+    if (currentPage * pageSize < filteredPeople.length) {
+      currentPage++;
+      highlightedIndex = 0;
+      renderAttendees();
+    }
+  });
 
-    input.addEventListener("input", () => renderSuggestion());
-
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        const matches = getMatches();
-        const selectedItem = matches[matchIndex];
-        if (selectedItem && !selected.some((i) => i.id === selectedItem.id)) {
-          selected.push(selectedItem);
-          input.value = "";
-          renderTags();
-          clearSuggestion();
-        }
+  searchBox.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const person = filteredPeople[(currentPage - 1) * pageSize + highlightedIndex];
+      if (person) {
+        if (e.shiftKey) selectedPeople.delete(person.id);
+        else selectedPeople.add(person.id);
       }
+      searchBox.value = '';
+      highlightedIndex = 0;
+      updateFilter();
+      searchBox.focus();
+    } else if (e.key === 'ArrowDown' && highlightedIndex < Math.min(pageSize, filteredPeople.length - (currentPage - 1) * pageSize) - 1) {
+      e.preventDefault();
+      highlightedIndex++;
+      highlightTopMatch();
+    } else if (e.key === 'ArrowUp' && highlightedIndex > 0) {
+      e.preventDefault();
+      highlightedIndex--;
+      highlightTopMatch();
+    }
+  });
+
+  document.getElementById('startGameNightForm').addEventListener('submit', (e) => {
+    document.querySelectorAll('input[name="attendees"][type="hidden"]').forEach(el => el.remove());
+    selectedPeople.forEach(id => {
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.name = 'attendees';
+      hiddenInput.value = id;
+      document.getElementById('startGameNightForm').appendChild(hiddenInput);
     });
+  });
 
-    function getMatches() {
-      const q = input.value.toLowerCase().trim();
-      return allItems.filter((i) => i.name.toLowerCase().includes(q));
-    }
-
-    function renderSuggestion() {
-      clearSuggestion();
-
-      const matches = getMatches();
-      if (matches.length === 0 || input.value.length < 1) return;
-
-      const suggestionBox = document.createElement("div");
-      suggestionBox.className = "autocomplete-dropdown";
-      suggestionBox.id = `${inputId}-dropdown`;
-
-      const item = matches[0];
-      const option = document.createElement("div");
-      option.className = "autocomplete-option";
-      option.textContent = item.name;
-      option.addEventListener("click", () => {
-        selected.push(item);
-        input.value = "";
-        renderTags();
-        clearSuggestion();
-      });
-
-      suggestionBox.appendChild(option);
-      input.parentNode.appendChild(suggestionBox);
-    }
-
-    function clearSuggestion() {
-      const box = document.getElementById(`${inputId}-dropdown`);
-      if (box) box.remove();
-    }
-
-    function renderTags() {
-      tagContainer.innerHTML = "";
-      form
-        .querySelectorAll(`input[name="${hiddenName}"]`)
-        .forEach((e) => e.remove());
-
-      selected.forEach((item) => {
-        const tag = document.createElement("span");
-        tag.className = "tag";
-        tag.textContent = item.name;
-
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.textContent = "×";
-        btn.addEventListener("click", () => {
-          selected = selected.filter((i) => i.id !== item.id);
-          renderTags();
-        });
-
-        tag.appendChild(btn);
-        tagContainer.appendChild(tag);
-
-        const hidden = document.createElement("input");
-        hidden.type = "hidden";
-        hidden.name = hiddenName;
-        hidden.value = item.id;
-        form.appendChild(hidden);
-      });
-    }
-
-    // Click-away behavior
-    document.addEventListener("click", (e) => {
-      if (!input.contains(e.target)) clearSuggestion();
-    });
-  }
+  renderAttendees();
 </script>
 {% endblock %}
