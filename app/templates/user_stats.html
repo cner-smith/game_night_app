@@ -107,7 +107,7 @@
         dropdown = document.createElement("div");
         dropdown.id = `${inputId}-dropdown`;
         dropdown.classList.add("autocomplete-dropdown");
-        input.parentNode.appendChild(dropdown);
+        input.insertAdjacentElement("afterend", dropdown);
       }
 
       dropdown.innerHTML = "";

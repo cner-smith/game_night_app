@@ -845,6 +845,8 @@ input[type="checkbox"] {
   border-radius: 10px;
   background-color: var(--light-color);
   margin-bottom: 20px;
+  position: relative;
+  z-index: 1;
 }
 
 .filters-panel .form-group {
@@ -1316,6 +1318,28 @@ input[type="checkbox"] {
 .form-group label {
   margin: 0;
   white-space: nowrap;
+}
+
+.autocomplete-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  background: var(--light-color);
+  border: 1px solid var(--border-color);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.autocomplete-option {
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.autocomplete-option:hover {
+  background-color: var(--tertiary-color);
 }
 
 .form-control {
