@@ -52,9 +52,31 @@ block content %}
   <button type="submit" class="btn btn--success">Save Rating</button>
 </form>
 
+<h2>Leaderboard (Top 3 Players)</h2>
+<table class="styled-table table--narrow">
+  <thead>
+    <tr>
+      <th>Player</th>
+      <th>Wins</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for player, wins in leaderboard %}
+    <tr>
+      <td>{{ player.person.first_name }} {{ player.person.last_name }}</td>
+      <td>{{ wins }}</td>
+    </tr>
+    {% else %}
+    <tr>
+      <td colspan="2">No leaderboard data available.</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
 {% if current_user.is_admin_or_owner %}
 <section class="module">
-  <h2 class="module__title">Tutorial Video (Admin Editable)</h2>
+  <h2 class="module__title">Tutorial URL</h2>
   <form
     action="{{ url_for('games.update_tutorial_url', game_id=game.id) }}"
     method="POST"
@@ -87,28 +109,6 @@ block content %}
   </div>
 </section>
 {% endif %}
-
-<h2>Leaderboard (Top 3 Players)</h2>
-<table class="styled-table table--narrow">
-  <thead>
-    <tr>
-      <th>Player</th>
-      <th>Wins</th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for player, wins in leaderboard %}
-    <tr>
-      <td>{{ player.person.first_name }} {{ player.person.last_name }}</td>
-      <td>{{ wins }}</td>
-    </tr>
-    {% else %}
-    <tr>
-      <td colspan="2">No leaderboard data available.</td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
 
 <!-- <h2>Previous Results</h2>
 <ul>
