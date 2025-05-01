@@ -1348,6 +1348,15 @@ input[type="checkbox"] {
   background-color: var(--tertiary-color);
 }
 
+.tag {
+  display: inline-block;
+  background-color: var(--secondary-color);
+  color: white;
+  padding: 4px 8px;
+  margin: 4px 4px 0 0;
+  border-radius: 4px;
+}
+
 .form-control {
   width: 100%;
   padding: 10px;
