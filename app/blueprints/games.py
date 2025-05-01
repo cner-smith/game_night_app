@@ -178,6 +178,14 @@ def user_stats():
         sort_order=sort_order
     )
 
-    return render_template("user_stats.html", stats=stats,
-                       sort_by=sort_by, sort_order=sort_order)
+    return render_template(
+        "user_stats.html",
+        stats=stats,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        start_date=start_date,
+        end_date=end_date,
+        selected_game_ids=game_ids,
+        selected_opponent_ids=opponent_ids
+    )
 
