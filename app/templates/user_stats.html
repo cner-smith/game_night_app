@@ -118,6 +118,19 @@ block content %}
   </tbody>
 </table>
 
+<div
+  style="
+    margin-top: 40px;
+    padding: 20px;
+    background: #f4f4f4;
+    border: 1px solid #ccc;
+  "
+>
+  <h3>Debug Info</h3>
+  <p><strong>Selected Game IDs:</strong> {{ selected_game_ids }}</p>
+  <p><strong>Selected Opponent IDs:</strong> {{ selected_opponent_ids }}</p>
+</div>
+
 <!-- Script: Autocomplete logic -->
 <script>
   async function fetchTopMatch(apiUrl, query) {
