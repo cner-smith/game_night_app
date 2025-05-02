@@ -178,7 +178,8 @@ block content %}
 
     // Rehydrate from initial dataset
     (async () => {
-      const selectedIds = JSON.parse(searchBox.dataset.selected || "[]");
+      const urlParams = new URLSearchParams(window.location.search);
+      const selectedIds = urlParams.getAll(inputName).map(Number);
       if (selectedIds.length > 0) {
         const items = await fetchByIds(apiUrl, selectedIds);
         items.forEach((item) => selected.set(item.id, item));
