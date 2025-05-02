@@ -33,7 +33,7 @@
   
             <div class="game-list__meta">
               <p>Round {{ gng.round }}</p>
-              <p>Your Rating: {{ user_ratings_by_game_id.get(gng.game_id, 'Not Rated') }}/10</p>
+              <p>Your Rating: {{ user_ratings_by_game_id.get(gng.game_id, 'Not Rated') }}</p>
             </div>
   
             {% if not game_night.final and (current_user.admin or current_user.owner) %}
