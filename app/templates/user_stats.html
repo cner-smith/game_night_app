@@ -37,9 +37,9 @@ block content %}
       autocomplete="off"
     />
     <div id="opponentTags" class="selected-tags">
-      {% for person in selected_opponent_namess %}
+      {% for person in selected_opponent_names %}
       <span class="tag">
-        {{ person.first_name }} {{ person.last_name }}
+        {{ person.name }}
         <button type="button" onclick="removeTag(this)">×</button>
         <input type="hidden" name="opponent_ids" value="{{ person.id }}" />
       </span>
@@ -81,18 +81,18 @@ block content %}
 <table class="styled-table">
   <thead>
     <tr>
-      {% for col, label in [('game_name', 'Game'), ('games_played', 'Plays'),
+      {% for col, label in [ ('game_name', 'Game'), ('games_played', 'Plays'),
       ('wins', 'Wins'), ('win_pct', 'Win %'), ('win_pct_last_5', 'Win % (Last
       5)'), ('average_position', 'Avg Pos'), ('last_played', 'Last Played')] %}
       <th>
         <a
           href="{{ url_for('games.user_stats',
-                            game_ids=request.args.getlist('game_ids'),
-                            opponent_ids=request.args.getlist('opponent_ids'),
-                            start_date=request.args.get('start_date'),
-                            end_date=request.args.get('end_date'),
-                            sort_by=col,
-                            sort_order='desc' if sort_by == col and sort_order == 'asc' else 'asc') }}"
+          game_ids=request.args.getlist('game_ids'),
+          opponent_ids=request.args.getlist('opponent_ids'),
+          start_date=request.args.get('start_date'),
+          end_date=request.args.get('end_date'),
+          sort_by=col,
+          sort_order='desc' if sort_by == col and sort_order == 'asc' else 'asc') }}"
         >
           {{ label }}{% if sort_by == col %} {{ '▲' if sort_order == 'asc' else
           '▼' }}{% endif %}
@@ -118,20 +118,7 @@ block content %}
   </tbody>
 </table>
 
-<div
-  style="
-    margin-top: 40px;
-    padding: 20px;
-    background: #f4f4f4;
-    border: 1px solid #ccc;
-  "
->
-  <h3>Debug Info</h3>
-  <p><strong>Selected Games:</strong> {{ selected_game_names }}</p>
-  <p><strong>Selected Opponents:</strong> {{ selected_opponent_names }}</p>
-</div>
-
-<!-- Script: Autocomplete logic -->
+<!-- Autocomplete script -->
 <script>
   async function fetchTopMatch(apiUrl, query) {
     if (!query || query.length < 1) return null;
