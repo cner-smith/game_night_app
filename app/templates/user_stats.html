@@ -5,7 +5,7 @@ block content %}
 
 <form method="get" class="filters-panel" id="userStatsForm">
   <!-- Game filter -->
-  <div class="form-group">
+  <div class="form-group form-group--block">
     <label for="gameSearch">Games:</label>
     <input
       type="text"
@@ -14,6 +14,7 @@ block content %}
       placeholder="Search for a game..."
       autocomplete="off"
     />
+    <div id="gameSuggestion" class="autocomplete-suggestion"></div>
     <div id="gameTags" class="selected-tags">
       {% for game in selected_game_names %}
       <span class="tag">
@@ -23,11 +24,10 @@ block content %}
       </span>
       {% endfor %}
     </div>
-    <div id="gameSuggestion" class="autocomplete-suggestion"></div>
   </div>
 
   <!-- Opponent filter -->
-  <div class="form-group">
+  <div class="form-group form-group--block">
     <label for="opponentSearch">Opponents:</label>
     <input
       type="text"
@@ -36,6 +36,7 @@ block content %}
       placeholder="Search for an opponent..."
       autocomplete="off"
     />
+    <div id="opponentSuggestion" class="autocomplete-suggestion"></div>
     <div id="opponentTags" class="selected-tags">
       {% for person in selected_opponent_names %}
       <span class="tag">
@@ -45,11 +46,10 @@ block content %}
       </span>
       {% endfor %}
     </div>
-    <div id="opponentSuggestion" class="autocomplete-suggestion"></div>
   </div>
 
   <!-- Date filters -->
-  <div class="form-group">
+  <div class="form-group form-group--block">
     <label for="start_date">Start Date:</label>
     <input
       type="date"
@@ -60,7 +60,7 @@ block content %}
     />
   </div>
 
-  <div class="form-group">
+  <div class="form-group form-group--block">
     <label for="end_date">End Date:</label>
     <input
       type="date"
@@ -82,7 +82,7 @@ block content %}
 </form>
 
 <!-- Results Table -->
-<table class="styled-table">
+<table class="styled-table stats-table">
   <thead>
     <tr>
       {% for col, label in [ ('game_name', 'Game'), ('games_played', 'Plays'),

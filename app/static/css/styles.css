@@ -1320,6 +1320,10 @@ input[type="checkbox"] {
   white-space: nowrap;
 }
 
+.form-group.form-group--block {
+  display: block;
+}
+
 .autocomplete-wrapper {
   position: relative;
   width: 100%;
@@ -1440,6 +1444,13 @@ input[type="checkbox"] {
 .table--narrow.styled-table td {
   font-size: 14px;
   padding: 6px 8px;
+}
+
+.stats-table th,
+.stats-table td {
+  padding: 4px 6px;
+  font-size: 13px;
+  text-align: center;
 }
 
 /* ==================================================
