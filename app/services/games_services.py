@@ -297,3 +297,16 @@ def get_user_stats(user_id, game_ids=None, opponent_ids=None, start_date=None, e
         query = query.order_by(sort_column.desc())
 
     return query.all()
+
+def get_selected_games(game_ids):
+    if not game_ids:
+        return []
+    return db.session.query(Game.id, Game.name).filter(Game.id.in_(game_ids)).all()
+
+def get_selected_opponents(opponent_ids):
+    if not opponent_ids:
+        return []
+    return db.session.query(
+        Person.id, Person.first_name, Person.last_name
+    ).filter(Person.id.in_(opponent_ids)).all()
+

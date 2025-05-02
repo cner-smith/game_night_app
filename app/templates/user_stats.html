@@ -23,8 +23,8 @@ block content %}
       </span>
       {% endfor %}
     </div>
+    <div id="gameSuggestion" class="autocomplete-suggestion"></div>
   </div>
-  <div id="gameSuggestion" class="autocomplete-suggestion"></div>
 
   <!-- Opponent filter -->
   <div class="form-group">
@@ -45,8 +45,8 @@ block content %}
       </span>
       {% endfor %}
     </div>
+    <div id="opponentSuggestion" class="autocomplete-suggestion"></div>
   </div>
-  <div id="opponentSuggestion" class="autocomplete-suggestion"></div>
 
   <!-- Date filters -->
   <div class="form-group">
@@ -81,9 +81,9 @@ block content %}
 <table class="styled-table">
   <thead>
     <tr>
-      {% for col, label in [ ('game_name', 'Game'), ('games_played', 'Plays'),
+      {% for col, label in [('game_name', 'Game'), ('games_played', 'Plays'),
       ('wins', 'Wins'), ('win_pct', 'Win %'), ('win_pct_last_5', 'Win % (Last
-      5)'), ('average_position', 'Avg Pos'), ('last_played', 'Last Played') ] %}
+      5)'), ('average_position', 'Avg Pos'), ('last_played', 'Last Played')] %}
       <th>
         <a
           href="{{ url_for('games.user_stats',
@@ -94,8 +94,8 @@ block content %}
                             sort_by=col,
                             sort_order='desc' if sort_by == col and sort_order == 'asc' else 'asc') }}"
         >
-          {{ label }} {% if sort_by == col %} {{ '▲' if sort_order == 'asc' else
-          '▼' }} {% endif %}
+          {{ label }}{% if sort_by == col %} {{ '▲' if sort_order == 'asc' else
+          '▼' }}{% endif %}
         </a>
       </th>
       {% endfor %}
@@ -127,8 +127,8 @@ block content %}
   "
 >
   <h3>Debug Info</h3>
-  <p><strong>Selected Game IDs:</strong> {{ selected_game_ids }}</p>
-  <p><strong>Selected Opponent IDs:</strong> {{ selected_opponent_ids }}</p>
+  <p><strong>Selected Games:</strong> {{ selected_game_names }}</p>
+  <p><strong>Selected Opponents:</strong> {{ selected_opponent_names }}</p>
 </div>
 
 <!-- Script: Autocomplete logic -->
@@ -161,15 +161,15 @@ block content %}
 
     searchBox.addEventListener("input", updateSuggestion);
 
-    searchBox.addEventListener("keydown", async (e) => {
+    searchBox.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
         if (topMatch) {
-          const hidden = document.createElement("input");
-          hidden.type = "hidden";
-          hidden.name = inputName;
-          hidden.value = topMatch.id;
-          tagsContainer.appendChild(hidden);
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = inputName;
+          input.value = topMatch.id;
+          form.appendChild(input);
           form.submit();
         }
       }
@@ -178,6 +178,7 @@ block content %}
 
   function removeTag(button) {
     const tag = button.parentNode;
+    tag.querySelector("input[type='hidden']").remove();
     tag.remove();
     document.getElementById("userStatsForm").submit();
   }

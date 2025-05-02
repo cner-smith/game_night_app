@@ -160,6 +160,7 @@ def user_stats():
     sort_by = request.args.get("sort_by", "wins")
     sort_order = request.args.get("sort_order", "desc")
 
+    # Default date range
     if not start_date:
         earliest = index_services.get_earliest_game_night()
         start_date = earliest.isoformat() if earliest else ""
@@ -167,7 +168,7 @@ def user_stats():
     if not end_date:
         end_date = date.today().isoformat()
 
-    # Fetch user statistics based on filters
+    # Fetch filtered user stats
     stats = games_services.get_user_stats(
         user_id=current_user.id,
         game_ids=game_ids,
@@ -178,6 +179,13 @@ def user_stats():
         sort_order=sort_order
     )
 
+    # Get selected game and opponent display names for tags
+    selected_games = games_services.get_selected_games(game_ids)
+    selected_opponents_raw = games_services.get_selected_opponents(opponent_ids)
+    selected_opponents = [
+        {"id": p.id, "name": f"{p.first_name} {p.last_name}"} for p in selected_opponents_raw
+    ]
+
     return render_template(
         "user_stats.html",
         stats=stats,
@@ -186,6 +194,8 @@ def user_stats():
         start_date=start_date,
         end_date=end_date,
         selected_game_ids=game_ids,
-        selected_opponent_ids=opponent_ids
+        selected_opponent_ids=opponent_ids,
+        selected_game_names=selected_games,
+        selected_opponent_names=selected_opponents
     )
 
