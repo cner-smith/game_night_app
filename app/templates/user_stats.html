@@ -1,8 +1,10 @@
 {% extends "base.html" %} {% block title %}Player Statistics{% endblock %} {%
 block content %}
+
 <h1>Player Statistics</h1>
 
 <form method="get" class="filters-panel" id="userStatsForm">
+  <!-- Game filter -->
   <div class="form-group">
     <label for="gameSearch">Games:</label>
     <input
@@ -11,12 +13,20 @@ block content %}
       class="form-control"
       placeholder="Search for a game..."
       autocomplete="off"
-      data-selected="{{ selected_game_ids | tojson }}"
     />
-    <div id="gameTags" class="selected-tags"></div>
+    <div id="gameTags" class="selected-tags">
+      {% for game in selected_games %}
+      <span class="tag">
+        {{ game.name }}
+        <button type="button" onclick="removeTag(this)">×</button>
+        <input type="hidden" name="game_ids" value="{{ game.id }}" />
+      </span>
+      {% endfor %}
+    </div>
   </div>
   <div id="gameSuggestion" class="autocomplete-suggestion"></div>
 
+  <!-- Opponent filter -->
   <div class="form-group">
     <label for="opponentSearch">Opponents:</label>
     <input
@@ -25,12 +35,20 @@ block content %}
       class="form-control"
       placeholder="Search for an opponent..."
       autocomplete="off"
-      data-selected="{{ selected_opponent_ids | tojson }}"
     />
-    <div id="opponentTags" class="selected-tags"></div>
+    <div id="opponentTags" class="selected-tags">
+      {% for person in selected_opponents %}
+      <span class="tag">
+        {{ person.first_name }} {{ person.last_name }}
+        <button type="button" onclick="removeTag(this)">×</button>
+        <input type="hidden" name="opponent_ids" value="{{ person.id }}" />
+      </span>
+      {% endfor %}
+    </div>
   </div>
   <div id="opponentSuggestion" class="autocomplete-suggestion"></div>
 
+  <!-- Date filters -->
   <div class="form-group">
     <label for="start_date">Start Date:</label>
     <input
@@ -59,12 +77,13 @@ block content %}
   </div>
 </form>
 
+<!-- Results Table -->
 <table class="styled-table">
   <thead>
     <tr>
       {% for col, label in [ ('game_name', 'Game'), ('games_played', 'Plays'),
       ('wins', 'Wins'), ('win_pct', 'Win %'), ('win_pct_last_5', 'Win % (Last
-      5)'), ('average_position', 'Avg Pos'), ('last_played', 'Last Played')] %}
+      5)'), ('average_position', 'Avg Pos'), ('last_played', 'Last Played') ] %}
       <th>
         <a
           href="{{ url_for('games.user_stats',
@@ -75,8 +94,8 @@ block content %}
                             sort_by=col,
                             sort_order='desc' if sort_by == col and sort_order == 'asc' else 'asc') }}"
         >
-          {{ label }} {% if sort_by == col %}{{ '▲' if sort_order == 'asc' else
-          '▼' }}{% endif %}
+          {{ label }} {% if sort_by == col %} {{ '▲' if sort_order == 'asc' else
+          '▼' }} {% endif %}
         </a>
       </th>
       {% endfor %}
@@ -99,18 +118,13 @@ block content %}
   </tbody>
 </table>
 
+<!-- Script: Autocomplete logic -->
 <script>
   async function fetchTopMatch(apiUrl, query) {
     if (!query || query.length < 1) return null;
     const res = await fetch(`${apiUrl}?q=${encodeURIComponent(query)}`);
     const data = await res.json();
     return data.length > 0 ? data[0] : null;
-  }
-
-  async function fetchByIds(apiUrl, ids) {
-    if (!ids.length) return [];
-    const res = await fetch(`${apiUrl}?ids=${ids.join(",")}`);
-    return await res.json();
   }
 
   function setupInlineAutocomplete(
@@ -124,7 +138,6 @@ block content %}
     const tagsContainer = document.getElementById(tagsContainerId);
     const suggestionBox = document.getElementById(suggestionBoxId);
     const form = document.getElementById("userStatsForm");
-    const selected = new Map();
     let topMatch = null;
 
     async function updateSuggestion() {
@@ -133,59 +146,27 @@ block content %}
       suggestionBox.textContent = topMatch ? topMatch.name : "";
     }
 
-    async function renderTags() {
-      tagsContainer.innerHTML = "";
-      [...selected.values()].forEach((item) => {
-        const tag = document.createElement("span");
-        tag.className = "tag";
-        tag.textContent = item.name;
-
-        const remove = document.createElement("button");
-        remove.textContent = "×";
-        remove.type = "button";
-        remove.onclick = () => {
-          selected.delete(item.id);
-          renderTags();
-          form.submit();
-        };
-
-        tag.appendChild(remove);
-        tagsContainer.appendChild(tag);
-
-        const hidden = document.createElement("input");
-        hidden.type = "hidden";
-        hidden.name = inputName;
-        hidden.value = item.id;
-        tagsContainer.appendChild(hidden);
-      });
-    }
-
     searchBox.addEventListener("input", updateSuggestion);
 
     searchBox.addEventListener("keydown", async (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        if (topMatch && !selected.has(topMatch.id)) {
-          selected.set(topMatch.id, topMatch);
-          searchBox.value = "";
-          topMatch = null;
-          suggestionBox.textContent = "";
-          await renderTags();
+        if (topMatch) {
+          const hidden = document.createElement("input");
+          hidden.type = "hidden";
+          hidden.name = inputName;
+          hidden.value = topMatch.id;
+          tagsContainer.appendChild(hidden);
           form.submit();
         }
       }
     });
+  }
 
-    // Rehydrate from initial dataset
-    (async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const selectedIds = urlParams.getAll(inputName).map(Number);
-      if (selectedIds.length > 0) {
-        const items = await fetchByIds(apiUrl, selectedIds);
-        items.forEach((item) => selected.set(item.id, item));
-        renderTags();
-      }
-    })();
+  function removeTag(button) {
+    const tag = button.parentNode;
+    tag.remove();
+    document.getElementById("userStatsForm").submit();
   }
 
   document.addEventListener("DOMContentLoaded", () => {
@@ -205,4 +186,5 @@ block content %}
     );
   });
 </script>
+
 {% endblock %}
