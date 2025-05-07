@@ -86,7 +86,7 @@ def start_scheduler(app):
 
     scheduler.add_job(
         func=job_with_app_context,
-        trigger=CronTrigger(hour=10, minute=0, timezone=central),
+        trigger=CronTrigger(hour=3, minute=45, timezone=central),
         id="daily_game_night_reminder",
         replace_existing=True
     )
