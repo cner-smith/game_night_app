@@ -12,16 +12,37 @@ def login(email, password):
     return False, "Invalid email or password.", None
 
 def signup(first_name, last_name, email, password):
-    """Register a new user."""
-    existing_user = Person.query.filter_by(email=email).first()
-    if existing_user:
+    """Complete signup for a pre-created user by setting email and password."""
+    email = email.strip().lower()
+    first_name = first_name.strip().lower()
+    last_name = last_name.strip().lower()
+
+    # Email already taken by any user
+    if Person.query.filter(func.lower(Person.email) == email).first():
         return False, "An account with this email already exists."
-    
-    hashed_password = bcrypt.generate_password_hash(password)
-    new_user = Person(first_name=first_name, last_name=last_name, email=email, password=hashed_password)
-    db.session.add(new_user)
+
+    # Try to find a matching person by name
+    user = (
+        Person.query
+        .filter(func.lower(Person.first_name) == first_name)
+        .filter(func.lower(Person.last_name) == last_name)
+        .first()
+    )
+
+    if not user:
+        return False, "No matching user found with that name. Please contact an admin."
+
+    if user.email or user.password:
+        return False, "This user has already completed signup. Please use the forgot password or contact an admin."
+
+    # Set email and password
+    user.email = email
+    user.password = bcrypt.generate_password_hash(password).decode('utf-8')
+    user.temp_pass = False
     db.session.commit()
-    
+
+    return True, "Signup completed successfully! You can now log in."
+
     return True, "Account created successfully! Please log in."
 
 def forgot_password(email):
@@ -53,7 +74,7 @@ def update_password(user, current_password, new_password, confirm_password):
     if new_password != confirm_password:
         return False, "New passwords do not match."
     
-    user.password = bcrypt.generate_password_hash(new_password)
+    user.password = bcrypt.generate_password_hash(new_password).decode('utf-8')
     user.temp_pass = False
     db.session.commit()
     
