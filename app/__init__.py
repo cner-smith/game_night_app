@@ -5,7 +5,6 @@ from flask_session import Session
 # Import Config & Extensions
 from app.config import Config
 from app.extensions import db, bcrypt, mail, login_manager
-import os
 
 
 def init_extensions(app):
@@ -63,9 +62,6 @@ def create_app():
     init_extensions(app)
     setup_database(app)
     register_blueprints(app)
-
-    # Start the scheduler only in the main process
-    if os.environ.get("RUN_MAIN") == "true" or app.config.get("ENV") != "production":
-        start_schedulers(app)
+    start_schedulers(app)
 
     return app

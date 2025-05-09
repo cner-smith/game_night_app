@@ -43,8 +43,6 @@ def signup(first_name, last_name, email, password):
 
     return True, "Signup completed successfully! You can now log in."
 
-    return True, "Account created successfully! Please log in."
-
 def forgot_password(email):
     """Generate a temporary password and send it to the user's email."""
     user = Person.query.filter_by(email=email).first()
