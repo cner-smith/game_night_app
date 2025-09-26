@@ -54,14 +54,16 @@ block content %}
   <div class="form-actions">
     <button type="submit" class="btn btn--success">Save Changes</button>
 
-    <form
-      action="{{ url_for('game_night.delete_game_night', game_night_id=game_night.id) }}"
-      method="POST"
-      onsubmit="return confirm('Are you sure you want to delete this game night? This cannot be undone.');"
-      style="display: inline;"
+    <button
+      type="submit"
+      class="btn btn--danger"
+      formaction="{{ url_for('game_night.delete_game_night', game_night_id=game_night.id) }}"
+      formmethod="POST"
+      formnovalidate
+      onclick="return confirm('Are you sure you want to delete this game night? This cannot be undone.');"
     >
-      <button type="submit" class="btn btn--danger">Delete Game Night</button>
-    </form>
+      Delete Game Night
+    </button>
 
     <a
       href="{{ url_for('game_night.view_game_night', game_night_id=game_night.id) }}"
