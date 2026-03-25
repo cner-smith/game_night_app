@@ -75,7 +75,7 @@ All templates inherit from `base.html`. Updating `base.html` (nav structure, Tai
 
 ### Testing for Phase 1
 
-No new business logic — no new unit tests required. Smoke tests (template renders without 500 errors) are sufficient and can be added as pytest fixtures.
+No new business logic — no new unit tests required. Smoke tests are sufficient: parameterized route checks via the Flask test client verifying each page returns 200 (or expected redirect) without a 500 error.
 
 ---
 
@@ -109,7 +109,7 @@ The existing `add_game.html` form currently takes a name and optional BGG ID. Th
 - "How to play" link (already stored as `tutorial_url`)
 - Min/max players and playtime (already in model, just better displayed)
 
-BGG data that doesn't already exist in the model is fetched live on page load and cached. No new model fields required — BGG rating/complexity are display-only (not stored). If we want to avoid live API calls on every page load, a `bgg_last_synced` timestamp and a simple re-fetch-if-stale pattern can be added.
+BGG data that doesn't already exist in the model (rating, complexity, categories) is display-only and not stored in the database — no new model fields required. On `view_game` page load, the `BGGService` is called and the result is served from the in-memory cache if available (same cache used by search, 10-minute TTL). On a cache miss the BGG API is called and the result is cached. This means the first load after cache expiry makes a live call; subsequent loads within the TTL window are instant. This is consistent with the in-memory cache described in the search flow above.
 
 ### Testing for Phase 2
 
@@ -134,7 +134,8 @@ Poll
   created_at      datetime
   closes_at       datetime (nullable — open-ended polls)
   closed          boolean default false
-  token           text UNIQUE NOT NULL  -- used in shareable URL
+  token           text UNIQUE NOT NULL  -- generated via secrets.token_urlsafe(16), used in shareable URL
+  multi_select    boolean default false -- true = checkboxes, false = radio buttons
 
 PollOption
   id              integer PK
@@ -149,6 +150,8 @@ PollResponse
   person_id       integer FK → people.id (nullable — anonymous responses)
   respondent_name text (used when person_id is null)
   created_at      datetime
+  -- One row per selected option. For single-select polls this is always one row
+  -- per respondent. For multi-select it can be multiple rows per respondent.
 ```
 
 ### Flows
@@ -166,7 +169,8 @@ PollResponse
 - `/poll/<token>` renders the poll publicly
 - Respondent selects options (single or multiple depending on poll type) and enters their name if not logged in
 - HTMX submits response, page updates to show "thanks" state and current results
-- Duplicate prevention: one response per `(poll_id, person_id)` for logged-in users; for anonymous, one response per `(poll_id, respondent_name)` — lightweight, good enough for friend-group use
+- Duplicate prevention: enforced at the application layer (not a DB UNIQUE constraint). For single-select polls, submitting checks whether any `PollResponse` rows already exist for `(poll_id, person_id)` / `(poll_id, respondent_name)` and rejects re-submission. For multi-select polls, the entire previous response set for the respondent is deleted and replaced on re-submission (last write wins). This is intentionally lightweight — suitable for a trust-based friend group.
+- Results visibility: a respondent must submit a response before they can see results. Anyone who has responded (logged-in or anonymous) can then see live results at any time by revisiting the poll URL. The admin can always see full results from the admin panel regardless of whether they've responded.
 
 **Results view:**
 - Logged-in users and anyone with the link can see live results after responding
