@@ -196,7 +196,7 @@ PollResponse
 - **Scope:** Unit tests for service functions; integration tests for Flask routes using the test client; no browser/E2E tests (overkill for this project)
 - **Database:** Tests use a separate in-memory SQLite database or a test PostgreSQL database (configured via `TEST_DATABASE_URL` env var)
 - **Mocking:** BGG API calls are always mocked in tests — no real network calls
-- **CI:** Not required (homelab project), but tests should be runnable with `pytest` from the repo root
+- **CI:** GitHub Actions runs on every push and pull request — see CI/CD section below
 
 ---
 
@@ -206,6 +206,34 @@ PollResponse
 - **`docs/`** — inline comments added to any new or significantly changed service functions
 - **CHANGELOG.md** — created to document what changed in this overhaul, for handoff back to the original author
 - `.gitignore` updated to include `.superpowers/`
+
+---
+
+## CI/CD & Automation
+
+### CI (GitHub Actions — unconditional)
+
+A `.github/workflows/ci.yml` workflow runs on every push and pull request to `main`:
+
+1. **Lint & format check** — `ruff check` and `ruff format --check`. Ruff replaces flake8, black, and isort in a single fast tool. Config lives in `pyproject.toml`.
+2. **Type checking** — `mypy` on `app/` and `tests/`. Catches type errors statically. Config in `pyproject.toml`.
+3. **Security scan** — `bandit -r app/` flags common Python security issues (SQLi, hardcoded secrets, etc.).
+4. **Tests** — `pytest` with coverage report. Uses a test PostgreSQL service container in the Actions environment (matches production DB engine).
+
+All four steps must pass for a push to be considered clean. The workflow uses Python 3.11 and caches pip dependencies.
+
+**New dev dependencies added to `requirements-dev.txt`:** `ruff`, `mypy`, `bandit`, `pytest`, `pytest-flask`, `pytest-cov`, `pytest-mock`
+
+A `.pre-commit-config.yaml` is also added so the same ruff and mypy checks can run locally before push (opt-in via `pre-commit install`).
+
+### CD (auto-deploy to homelab — TBD)
+
+> **Pending:** Waiting to confirm how the homelab receives updates (SSH access, self-hosted Actions runner, Watchtower, etc.) before specifying the deployment pipeline. This section will be completed before implementation planning begins.
+>
+> Options under consideration:
+> - **Self-hosted GitHub Actions runner** on the homelab — runner pulls the repo and runs `docker compose up --build -d` on successful CI. No inbound port exposure needed.
+> - **Watchtower** — watches Docker Hub for a new image pushed by CI, auto-redeploys. Requires a Docker Hub push step in CI.
+> - **Scripted manual deploy** — CI passes, developer SSHs in and runs `./scripts/deploy.sh`. Simpler, still documented and reproducible.
 
 ---
 
