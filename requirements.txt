@@ -10,3 +10,5 @@ apscheduler
 python-dotenv
 flask-session
 gunicorn
+Flask-Migrate==4.0.7
+cachetools==5.3.3
