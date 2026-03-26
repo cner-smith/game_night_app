@@ -138,8 +138,8 @@ git commit -m "feat: add Poll, PollOption, PollResponse models and migration"
 # tests/services/test_poll_services.py
 import pytest
 from datetime import datetime, timedelta
-from app.models import Poll, PollOption, PollResponse
-from app.extensions import db
+from app.models import Poll, PollOption, PollResponse, Person
+from app.extensions import db as _db
 from app.services.poll_services import (
     create_poll,
     poll_is_active,
@@ -149,15 +149,30 @@ from app.services.poll_services import (
 )
 
 
+# Note: `app` and `db` fixtures come from tests/conftest.py (Phase 1).
+# Before writing these tests, read the Person model in app/models.py to confirm
+# the required fields (at minimum: name and email are typically required).
+
+
 @pytest.fixture()
-def sample_poll(app, db):
+def poll_author(app):
+    """A real Person to satisfy Poll.created_by NOT NULL FK constraint."""
+    with app.app_context():
+        person = Person(name="Test Author", email="author@test.com")
+        _db.session.add(person)
+        _db.session.commit()
+        yield person
+
+
+@pytest.fixture()
+def sample_poll(app, db, poll_author):
     """Create a simple single-select poll for testing."""
     with app.app_context():
         poll = create_poll(
             title="Test Poll",
             description="Which day?",
             option_labels=["Friday", "Saturday", "Sunday"],
-            created_by_id=None,  # We'll use a real person in integration tests
+            created_by_id=poll_author.id,
             multi_select=False,
         )
         yield poll
@@ -191,16 +206,16 @@ def test_poll_is_active_not_yet_expired(app, sample_poll):
 
 # ── create_poll ─────────────────────────────────────────────────────────
 
-def test_create_poll_generates_token(app, db):
+def test_create_poll_generates_token(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Availability", None, ["Mon", "Tue"], None, False)
+        poll = create_poll("Availability", None, ["Mon", "Tue"], poll_author.id, False)
         assert poll.token is not None
         assert len(poll.token) >= 16
 
 
-def test_create_poll_creates_options(app, db):
+def test_create_poll_creates_options(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Q", None, ["A", "B", "C"], None, False)
+        poll = create_poll("Q", None, ["A", "B", "C"], poll_author.id, False)
         assert len(poll.options) == 3
         assert poll.options[0].label == "A"
         assert poll.options[1].display_order == 1
@@ -208,9 +223,9 @@ def test_create_poll_creates_options(app, db):
 
 # ── submit_response ─────────────────────────────────────────────────────
 
-def test_submit_response_anonymous_single_select(app, db):
+def test_submit_response_anonymous_single_select(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Q", None, ["A", "B"], None, False)
+        poll = create_poll("Q", None, ["A", "B"], poll_author.id, False)
         option_id = poll.options[0].id
         success, msg = submit_response(poll, option_ids=[option_id],
                                        person_id=None, respondent_name="Alice")
@@ -218,9 +233,9 @@ def test_submit_response_anonymous_single_select(app, db):
         assert PollResponse.query.filter_by(poll_id=poll.id).count() == 1
 
 
-def test_submit_response_rejects_duplicate_single_select(app, db):
+def test_submit_response_rejects_duplicate_single_select(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Q", None, ["A", "B"], None, False)
+        poll = create_poll("Q", None, ["A", "B"], poll_author.id, False)
         option_id = poll.options[0].id
         submit_response(poll, [option_id], None, "Alice")
         success, msg = submit_response(poll, [option_id], None, "Alice")
@@ -228,18 +243,18 @@ def test_submit_response_rejects_duplicate_single_select(app, db):
         assert "already" in msg.lower()
 
 
-def test_submit_response_name_matching_is_case_insensitive(app, db):
+def test_submit_response_name_matching_is_case_insensitive(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Q", None, ["A", "B"], None, False)
+        poll = create_poll("Q", None, ["A", "B"], poll_author.id, False)
         option_id = poll.options[0].id
         submit_response(poll, [option_id], None, "Alice")
         success, _ = submit_response(poll, [option_id], None, "ALICE")
         assert success is False
 
 
-def test_submit_response_replaces_on_multi_select(app, db):
+def test_submit_response_replaces_on_multi_select(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Q", None, ["A", "B", "C"], None, True)
+        poll = create_poll("Q", None, ["A", "B", "C"], poll_author.id, True)
         ids = [poll.options[0].id, poll.options[1].id]
         submit_response(poll, ids, None, "Bob")
         new_ids = [poll.options[2].id]
@@ -250,9 +265,9 @@ def test_submit_response_replaces_on_multi_select(app, db):
         assert responses[0].option_id == poll.options[2].id
 
 
-def test_submit_response_rejected_for_closed_poll(app, db):
+def test_submit_response_rejected_for_closed_poll(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Q", None, ["A"], None, False)
+        poll = create_poll("Q", None, ["A"], poll_author.id, False)
         poll.closed = True
         success, msg = submit_response(poll, [poll.options[0].id], None, "Alice")
         assert success is False
@@ -260,9 +275,9 @@ def test_submit_response_rejected_for_closed_poll(app, db):
 
 # ── get_results ─────────────────────────────────────────────────────────
 
-def test_get_results_counts_responses(app, db):
+def test_get_results_counts_responses(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Q", None, ["A", "B"], None, False)
+        poll = create_poll("Q", None, ["A", "B"], poll_author.id, False)
         submit_response(poll, [poll.options[0].id], None, "Alice")
         submit_response(poll, [poll.options[0].id], None, "Bob")
         submit_response(poll, [poll.options[1].id], None, "Carol")
@@ -364,10 +379,13 @@ def submit_response(
     if not poll_is_active(poll):
         return False, "This poll is no longer accepting responses."
 
-    normalised_name = respondent_name.strip() if respondent_name else None
+    # Store original casing for display; normalised only for duplicate checks.
+    # Spec: "respondent_name is stored as entered, normalised for duplicate-prevention lookups only."
+    original_name = respondent_name  # Kept as-is from form input
+    normalised_name = respondent_name.strip().lower() if respondent_name else None
 
     if poll.multi_select:
-        # Delete existing responses for this respondent and replace
+        # Delete existing responses for this respondent and replace (last-write-wins)
         existing = _get_existing_responses(poll, person_id, normalised_name)
         for r in existing:
             db.session.delete(r)
@@ -386,7 +404,7 @@ def submit_response(
             poll_id=poll.id,
             option_id=oid,
             person_id=person_id,
-            respondent_name=normalised_name,
+            respondent_name=original_name,  # Store original casing
         ))
 
     db.session.commit()
@@ -447,26 +465,42 @@ git commit -m "feat: implement poll services with TDD (create, respond, results,
 
 - [ ] **Step 1: Write failing integration tests**
 
+> **Fixture note:** `client`, `admin_client`, `auth_client`, `app`, and `db` are all defined in `tests/conftest.py` from Phase 1. Do not redefine them here. If `admin_client` or `auth_client` are missing from the Phase 1 conftest, add them there — they create a test user and log in with/without admin privileges.
+
 ```python
 # tests/blueprints/test_polls.py
+# Note: `client`, `admin_client`, `auth_client`, `app`, and `db` fixtures are all
+# defined in tests/conftest.py (created in Phase 1). No need to redefine them here.
 import pytest
-from app.models import Poll
+from app.models import Poll, Person
+from app.extensions import db as _db
 from app.services.poll_services import create_poll
 
 
 @pytest.fixture()
-def open_poll(app, db):
+def poll_author(app):
+    """A real Person to satisfy Poll.created_by NOT NULL constraint."""
     with app.app_context():
-        poll = create_poll("Best Day?", None, ["Friday", "Saturday"], None, False)
+        person = Person(name="Poll Author", email="pollauthor@test.com")
+        _db.session.add(person)
+        _db.session.commit()
+        yield person
+        _db.session.delete(person)
+        _db.session.commit()
+
+
+@pytest.fixture()
+def open_poll(app, db, poll_author):
+    with app.app_context():
+        poll = create_poll("Best Day?", None, ["Friday", "Saturday"], poll_author.id, False)
         yield poll
 
 
 @pytest.fixture()
-def closed_poll(app, db):
+def closed_poll(app, db, poll_author):
     with app.app_context():
-        poll = create_poll("Old Poll", None, ["A", "B"], None, False)
+        poll = create_poll("Old Poll", None, ["A", "B"], poll_author.id, False)
         poll.closed = True
-        from app.extensions import db as _db
         _db.session.commit()
         yield poll
 
@@ -551,12 +585,14 @@ from app.services.poll_services import (
 )
 from app.utils.decorators import admin_required  # Adjust import to match existing decorator path
 
-polls_bp = Blueprint("polls", __name__, url_prefix="/polls")
+# No url_prefix — admin routes use /polls/... and public route uses /poll/<token>
+# This keeps the shareable URL as /poll/<token> per the spec.
+polls_bp = Blueprint("polls", __name__)
 
 
 # ── Admin routes (login + admin required) ────────────────────────────── #
 
-@polls_bp.route("/")
+@polls_bp.route("/polls/")
 @login_required
 @admin_required
 def poll_list():
@@ -565,7 +601,7 @@ def poll_list():
     return render_template("poll_list.html", polls=polls)
 
 
-@polls_bp.route("/create", methods=["GET", "POST"])
+@polls_bp.route("/polls/create", methods=["GET", "POST"])
 @login_required
 @admin_required
 def poll_create():
@@ -589,7 +625,7 @@ def poll_create():
     return render_template("poll_create.html")
 
 
-@polls_bp.route("/<int:poll_id>/close", methods=["POST"])
+@polls_bp.route("/polls/<int:poll_id>/close", methods=["POST"])
 @login_required
 @admin_required
 def poll_close(poll_id: int):
@@ -602,8 +638,9 @@ def poll_close(poll_id: int):
 
 
 # ── Public routes (no login required) ────────────────────────────────── #
+# Shareable URL: /poll/<token> — matches what is shown in the admin panel.
 
-@polls_bp.route("/respond/<token>", endpoint="poll_respond")
+@polls_bp.route("/poll/<token>", endpoint="poll_respond")
 def poll_page(token: str):
     """Public poll page — anyone with the link can view and respond."""
     poll = get_poll_by_token(token)
@@ -620,7 +657,7 @@ def poll_page(token: str):
                            results=results)
 
 
-@polls_bp.route("/respond/<token>/submit", methods=["POST"], endpoint="poll_submit")
+@polls_bp.route("/poll/<token>/respond", methods=["POST"], endpoint="poll_submit")
 def poll_submit(token: str):
     """HTMX endpoint — submit poll response, return fragment."""
     poll = get_poll_by_token(token)
@@ -628,7 +665,7 @@ def poll_submit(token: str):
         abort(404)
 
     person_id = current_user.id if current_user.is_authenticated else None
-    respondent_name = request.form.get("respondent_name", "").strip() or None
+    respondent_name = request.form.get("respondent_name", "") or None
     option_ids_raw = request.form.getlist("option_ids")
 
     try:
@@ -654,8 +691,6 @@ def poll_submit(token: str):
     return render_template("_poll_thanks.html",
                            success=success, message=message, results=results, poll=poll)
 ```
-
-Note: the public poll URL is `/polls/respond/<token>`. Register this at `/poll/<token>` by adjusting the blueprint url_prefix or adding an app-level route alias — ensure the shareable URL matches what's shown in the admin panel.
 
 - [ ] **Step 4: Register the blueprint**
 

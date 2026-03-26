@@ -93,12 +93,15 @@ DETAILS_XML = b"""<?xml version="1.0" encoding="utf-8"?>
 </items>"""
 
 
+from app.services import bgg_service as _bgg_module
+
+
 @pytest.fixture(autouse=True)
 def clear_cache():
-    """Clear BGGService cache between tests."""
-    BGGService._cache.clear()
+    """Clear module-level BGGService cache between tests."""
+    _bgg_module._cache.clear()
     yield
-    BGGService._cache.clear()
+    _bgg_module._cache.clear()
 
 
 def test_search_returns_empty_for_short_query():
@@ -224,11 +227,14 @@ logger = logging.getLogger(__name__)
 _BGG_BASE = "https://boardgamegeek.com/xmlapi2"
 _TIMEOUT = 5  # seconds
 
+# Module-level cache and lock. TTLCache is not thread-safe on its own;
+# the RLock is required because APScheduler runs in a background thread
+# even with a single gunicorn worker.
+_cache: cachetools.TTLCache = cachetools.TTLCache(maxsize=200, ttl=600)
+_lock = threading.RLock()
+
 
 class BGGService:
-    _cache: cachetools.TTLCache = cachetools.TTLCache(maxsize=200, ttl=600)
-    _lock = threading.RLock()
-
     # ------------------------------------------------------------------ #
     # Public API                                                           #
     # ------------------------------------------------------------------ #
@@ -251,10 +257,17 @@ class BGGService:
             return []
 
     @classmethod
-    @cachetools.cached(cache=lambda self: self._cache, key=lambda self, bgg_id: bgg_id, lock=lambda self: self._lock)
     def fetch_details(cls, bgg_id: int) -> dict:
-        """Fetch full BGG details for a game by BGG ID. Returns {} on failure."""
-        return cls._fetch_with_retry(bgg_id)
+        """Fetch full BGG details for a game by BGG ID. Returns {} on failure.
+        Results are cached in the module-level TTLCache (10 min, max 200 entries).
+        """
+        with _lock:
+            if bgg_id in _cache:
+                return _cache[bgg_id]
+        result = cls._fetch_with_retry(bgg_id)
+        with _lock:
+            _cache[bgg_id] = result
+        return result
 
     # ------------------------------------------------------------------ #
     # Internal helpers                                                     #
@@ -365,25 +378,6 @@ class BGGService:
         }
 ```
 
-Note: the `@cachetools.cached` decorator on a classmethod needs the cache and lock accessed via `cls`. Adjust the decorator to use module-level cache and lock:
-
-```python
-_cache: cachetools.TTLCache = cachetools.TTLCache(maxsize=200, ttl=600)
-_lock = threading.RLock()
-
-# Use module-level decorator for classmethod:
-@classmethod
-def fetch_details(cls, bgg_id: int) -> dict:
-    with _lock:
-        if bgg_id in _cache:
-            return _cache[bgg_id]
-        result = cls._fetch_with_retry(bgg_id)
-        _cache[bgg_id] = result
-        return result
-```
-
-Update `BGGService` to use module-level `_cache` and `_lock` for the test fixture to work correctly.
-
 - [ ] **Step 4: Run tests to confirm they pass**
 
 ```bash
@@ -421,6 +415,13 @@ Replace `from app.utils import fetch_and_parse_bgg_data` with `from app.services
 Replace all calls to `fetch_and_parse_bgg_data(bgg_id)` with `BGGService.fetch_details(bgg_id)`.
 
 The `get_or_create_game` function calls this — the signature and return dict keys should be compatible since `BGGService.fetch_details` returns the same keys (`name`, `description`, `min_players`, `max_players`, `playtime`, `image_url`).
+
+**Critical: verify null-name handling.** `BGGService.fetch_details` returns `{}` on failure. Read `get_or_create_game` carefully and confirm it handles the case where `fetch_details` returns `{}` (i.e., BGG is down or the ID is invalid). The game `name` field is likely `NOT NULL` — if the code blindly passes `None` as the name, it will raise a DB constraint error. Add a guard if one is not already present:
+```python
+bgg_data = BGGService.fetch_details(bgg_id)
+if not bgg_data.get("name"):
+    return None  # or raise, depending on existing contract
+```
 
 - [ ] **Step 4: Delete the old files**
 

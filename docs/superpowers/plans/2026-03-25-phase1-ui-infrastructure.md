@@ -19,14 +19,15 @@
 - `requirements-dev.txt` — dev/test dependencies
 - `.pre-commit-config.yaml` — pre-commit hooks (opt-in)
 - `.dockerignore` — exclude .git, tests/, docs/, .env from image
-- `.github/workflows/ci.yml` — CI pipeline
+- `.github/workflows/ci.yml` — CI pipeline + GHCR publish job
+- `scripts/entrypoint.sh` — runs `flask db upgrade` then starts gunicorn (migration-safe startup)
 - `tests/__init__.py`
 - `tests/conftest.py` — app factory, test client, db fixtures
 - `tests/test_smoke.py` — parameterized route smoke tests
 
 ### Modified files
 - `requirements.txt` — add `flask-migrate`, `cachetools`
-- `Dockerfile` — Python 3.11, fix layer order (requirements before app code)
+- `Dockerfile` — Python 3.11, fix layer order (requirements before app code), switch CMD to ENTRYPOINT via entrypoint.sh
 - `docker-compose.game_night.yml` — remove host-bind volume mounts, add healthcheck, set `-w 1`
 - `app/__init__.py` — init Flask-Migrate, remove `test_bp`, gate `db.create_all()` behind DEBUG
 - `app/extensions.py` — add `migrate` extension instance
@@ -241,9 +242,26 @@ pyproject.toml
 requirements-dev.txt
 ```
 
-- [ ] **Step 2: Fix `Dockerfile`**
+- [ ] **Step 2: Create `scripts/entrypoint.sh`**
 
-Read the current Dockerfile, then update it so requirements are installed before app code is copied (better layer caching), and upgrade to Python 3.11:
+This script runs database migrations automatically on every container start, then hands off to gunicorn. Alembic migrations are idempotent, so running this on restart is safe.
+
+```bash
+#!/bin/sh
+set -e
+
+echo "Running database migrations..."
+flask db upgrade
+
+echo "Starting gunicorn..."
+exec gunicorn -w 1 -b 0.0.0.0:8000 "app:create_app()"
+```
+
+Make it executable: the Dockerfile will handle this with `RUN chmod +x scripts/entrypoint.sh`.
+
+- [ ] **Step 3: Fix `Dockerfile`**
+
+Read the current Dockerfile, then update it so requirements are installed before app code is copied (better layer caching), upgrade to Python 3.11, and use the entrypoint script:
 
 ```dockerfile
 FROM python:3.11-slim
@@ -257,40 +275,44 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
+RUN chmod +x scripts/entrypoint.sh
+
 EXPOSE 8000
 
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:8000", "app:create_app()"]
+ENTRYPOINT ["scripts/entrypoint.sh"]
 ```
 
-- [ ] **Step 3: Update `docker-compose.game_night.yml`**
+- [ ] **Step 4: Update `docker-compose.game_night.yml`**
 
 Read the current file, then make these changes:
 1. Remove the host-bind volume mounts for `app/templates` and `app/static` (the image must serve what was built into it)
 2. Add a healthcheck
-3. Ensure the gunicorn command uses `-w 1`
+3. Remove any explicit `command:` override — the entrypoint handles startup now (no separate `-w 1` gunicorn command needed in compose)
 
 The service definition should look like:
 ```yaml
 healthcheck:
-  test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+  test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
   interval: 30s
   timeout: 5s
   retries: 3
   start_period: 15s
 ```
 
-- [ ] **Step 4: Verify Docker build succeeds**
+Note: `curl` is not present in `python:3.11-slim`. Use the Python urllib approach above to avoid a silently broken healthcheck.
+
+- [ ] **Step 5: Verify Docker build succeeds**
 
 ```bash
 docker build -t gamenight:test .
 ```
 Expected: Build completes with no errors.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
-git add .dockerignore Dockerfile docker-compose.game_night.yml
-git commit -m "chore: fix dockerfile layer order, upgrade to python 3.11, remove host-bind volume mounts"
+git add .dockerignore Dockerfile docker-compose.game_night.yml scripts/entrypoint.sh
+git commit -m "chore: fix dockerfile layer order, upgrade to python 3.11, add migration entrypoint"
 ```
 
 ---
@@ -321,7 +343,7 @@ def app():
     os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
     os.environ["FLASK_DEBUG"] = "1"  # Allows db.create_all() in setup_database
     os.environ["SECRET_KEY"] = "test-secret-key"
-    os.environ["SESSION_TYPE"] = "filesystem"
+    os.environ["SESSION_TYPE"] = "null"  # "null" avoids filesystem dependency in CI
 
     app = create_app()
     app.config.update(
@@ -545,7 +567,37 @@ jobs:
           SECRET_KEY: ci-secret-key
           FLASK_DEBUG: "1"
         run: pytest --cov=app --cov-report=term-missing --cov-fail-under=60 -v
+
+  publish:
+    name: Publish image to GHCR
+    runs-on: ubuntu-latest
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:latest
 ```
+
+The `publish` job only runs after `ci` passes and only on direct pushes to `main` (not PRs). It uses `GITHUB_TOKEN` — no extra secrets required. The homelab webhook continues to work as-is: it restarts the container pulling from GHCR, which now only contains CI-passing builds.
+
+**Note for the repository owner:** The GHCR package visibility defaults to private for new packages. After the first publish, go to the package settings on GitHub and set it to public (or configure the homelab's Docker daemon with a GHCR auth token). Public is simpler for homelab use and appropriate for a personal project.
 
 - [ ] **Step 2: Create `.pre-commit-config.yaml`**
 
@@ -570,7 +622,7 @@ repos:
 
 ```bash
 git add .github/ .pre-commit-config.yaml
-git commit -m "ci: add github actions pipeline with lint, typecheck, security scan, and tests"
+git commit -m "ci: add github actions pipeline with lint, typecheck, security scan, tests, and ghcr publish"
 ```
 
 ---
@@ -687,6 +739,8 @@ Replace the content of `app/static/css/styles.css` with a minimal override file:
     </nav>
 
     <!-- User + sign out at bottom -->
+    <!-- Guard with is_authenticated — Phase 3 introduces public routes that use base.html -->
+    {% if current_user.is_authenticated %}
     <div class="flex flex-col items-center gap-1 pb-4 border-t border-stone-200 pt-4">
       <a href="{{ url_for('auth.manage_user') }}"
          title="{{ current_user.first_name }} {{ current_user.last_name }}"

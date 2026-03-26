@@ -248,15 +248,21 @@ All five steps must pass for a push to be considered clean. The workflow uses **
 
 A `.pre-commit-config.yaml` is also added so the same ruff and mypy checks can run locally before push (opt-in via `pre-commit install`). The `.pre-commit-config.yaml` pins the same ruff version as `requirements-dev.txt` to prevent silent divergence.
 
-### CD (auto-deploy to homelab — TBD)
+### CD (auto-deploy to homelab)
 
-> **Pending:** Waiting to confirm how the homelab receives updates (SSH access, self-hosted Actions runner, Watchtower, etc.) before specifying the deployment pipeline. This section will be completed before implementation planning begins.
->
-> **Recommendation (pending confirmation):** Self-hosted GitHub Actions runner on the homelab. Runner connects to GitHub over outbound HTTPS (no inbound port exposure). On successful CI, the deploy job runs: `git pull`, `docker compose build`, `flask db upgrade`, `docker compose up -d`. This is the only option that handles database migrations automatically as part of deploy — critical for Phase 3.
->
-> Watchtower is not recommended — it has no migration awareness and complicates rollback.
->
-> Scripted manual deploy (`./scripts/deploy.sh`) is a valid fallback if a self-hosted runner is not feasible. The script would do the same steps as above; CI just doesn't trigger it automatically.
+The homelab already has a GitHub webhook configured: on every push to `main`, it restarts the Docker container and pulls the latest image. This existing mechanism is preserved and extended rather than replaced.
+
+**How it works after this project:**
+
+1. **Image publishing** — A `publish` job in `.github/workflows/ci.yml` runs only after the `ci` job passes on `main`. It builds the Docker image and pushes it to GitHub Container Registry (`ghcr.io/<owner>/game_night_app:latest`). Images are only published for CI-passing commits — a failing push never produces a new image.
+
+2. **Homelab webhook** — The existing webhook continues to fire on push, pulling from GHCR and restarting the container. Because the image is only published after CI passes, the homelab will always be running a vetted build. In the (brief) window between the push event and GHCR publish completing, the webhook restarts with the previous image — this is safe and self-correcting.
+
+3. **Migrations** — A `scripts/entrypoint.sh` script is added to the repo and set as the Docker `ENTRYPOINT`. On every container start it runs `flask db upgrade` before handing off to gunicorn. Alembic migrations are idempotent: if no migration is pending, the command is a no-op. This ensures Phase 3 schema changes are applied automatically on deploy without any changes to the homelab webhook script.
+
+**Rollback:** Re-push a previous commit to `main`. CI runs and publishes the old image; the webhook restarts with it. For database rollbacks, run `flask db downgrade` manually on the homelab — this is intentionally manual given the homelab scale.
+
+**GHCR authentication:** The `publish` job uses `GITHUB_TOKEN` (automatically available in Actions) for `docker login`. No additional secrets are required.
 
 ---
 
