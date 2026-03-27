@@ -1,6 +1,6 @@
 from app.models import db, Game, OwnedBy, Wishlist, Player, Result, GameNight, GameNightGame, GamesIndex, Person, GameRatings
 from sqlalchemy import func, distinct, case
-from app.utils import fetch_and_parse_bgg_data
+from app.services.bgg_service import BGGService
 from datetime import datetime
 
 def get_or_create_game(game_name, bgg_id=None):
@@ -19,7 +19,7 @@ def get_or_create_game(game_name, bgg_id=None):
         if existing_by_bgg:
             # If the existing record is missing data, update it now
             if not existing_by_bgg.name or not existing_by_bgg.description:
-                bgg_details = fetch_and_parse_bgg_data(bgg_id)
+                bgg_details = BGGService.fetch_details(bgg_id)
                 if bgg_details:
                     existing_by_bgg.name = bgg_details.get("name") or existing_by_bgg.name
                     existing_by_bgg.description = bgg_details.get("description") or existing_by_bgg.description
@@ -30,7 +30,7 @@ def get_or_create_game(game_name, bgg_id=None):
                     db.session.commit()
             return existing_by_bgg, None
 
-        bgg_details = fetch_and_parse_bgg_data(bgg_id)
+        bgg_details = BGGService.fetch_details(bgg_id)
 
     # Use BGG name if no name was provided
     effective_name = game_name or bgg_details.get("name", "")
