@@ -21,12 +21,18 @@ def get_or_create_game(game_name, bgg_id=None):
             if not existing_by_bgg.name or not existing_by_bgg.description:
                 bgg_details = BGGService.fetch_details(bgg_id)
                 if bgg_details:
-                    existing_by_bgg.name = bgg_details.get("name") or existing_by_bgg.name
-                    existing_by_bgg.description = bgg_details.get("description") or existing_by_bgg.description
-                    existing_by_bgg.min_players = bgg_details.get("min_players") or existing_by_bgg.min_players
-                    existing_by_bgg.max_players = bgg_details.get("max_players") or existing_by_bgg.max_players
-                    existing_by_bgg.playtime = bgg_details.get("playtime") or existing_by_bgg.playtime
-                    existing_by_bgg.image_url = bgg_details.get("image_url") or existing_by_bgg.image_url
+                    val = bgg_details.get("name")
+                    existing_by_bgg.name = val if val is not None else existing_by_bgg.name
+                    val = bgg_details.get("description")
+                    existing_by_bgg.description = val if val is not None else existing_by_bgg.description
+                    val = bgg_details.get("min_players")
+                    existing_by_bgg.min_players = val if val is not None else existing_by_bgg.min_players
+                    val = bgg_details.get("max_players")
+                    existing_by_bgg.max_players = val if val is not None else existing_by_bgg.max_players
+                    val = bgg_details.get("playtime")
+                    existing_by_bgg.playtime = val if val is not None else existing_by_bgg.playtime
+                    val = bgg_details.get("image_url")
+                    existing_by_bgg.image_url = val if val is not None else existing_by_bgg.image_url
                     db.session.commit()
             return existing_by_bgg, None
 
