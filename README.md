@@ -12,7 +12,7 @@ A Flask web app for coordinating board game nights with friends — track your l
 ## Local Development
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.11+ (CI and Docker use 3.11; tested locally with 3.14)
 - PostgreSQL running locally
 - Docker (optional, for container testing)
 
@@ -40,18 +40,27 @@ flask db init          # first time only
 flask db stamp head    # if existing schema (brownfield)
 flask db upgrade       # apply migrations
 
+# Note: APP_TIMEZONE is configurable in .env (defaults to America/Chicago)
+# For existing databases (already have tables from before Flask-Migrate was added):
+#   flask db stamp head  # Mark current state as up-to-date
+
 # Run the dev server
 flask run
 ```
 
 ### Running Tests
 
+Tests require a PostgreSQL database and only run in CI. GitHub Actions provides a PostgreSQL 15 service automatically. To run locally, create the test database first:
+
 ```bash
+createdb gamenight_test
 export TEST_DATABASE_URL=postgresql://user:password@localhost:5432/gamenight_test
 pytest
 ```
 
 ### Linting
+
+These tools are required to pass before pushing. They run in CI and block merges if failing:
 
 ```bash
 ruff check .

@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented here.
 
-## [Unreleased]
+## [Unreleased] — Phase 1: UI Infrastructure (2026-03-26)
 
 ### Added
 - Tailwind CSS CDN replacing custom CSS
@@ -11,8 +11,11 @@ All notable changes to this project will be documented here.
 - Flask-Migrate (Alembic) for database schema management
 - pytest infrastructure with PostgreSQL-backed integration tests
 - GitHub Actions CI pipeline (lint → typecheck → security → build → test → publish)
-- `.env.example` for new developer onboarding
+- `.env.example` for new developer onboarding with comprehensive variable documentation
+- `.gitignore` for Python/Flask artifacts
 - `.dockerignore` for cleaner Docker builds
+- `requirements-dev.txt` for development dependencies
+- `APP_TIMEZONE` configurable timezone setting (defaults to America/Chicago)
 - Python 3.11 base image in Dockerfile
 
 ### Changed
@@ -24,3 +27,16 @@ All notable changes to this project will be documented here.
 
 ### Removed
 - `app/static/css/styles.css` bulk custom CSS (kept only minimal overrides)
+
+## Upgrade Guide (for existing installations)
+
+If you have an existing gamenight database created before Phase 1 (tables were
+created by `db.create_all()`), run this once after deploying Phase 1:
+
+```bash
+# Mark your existing schema as current (do NOT run db upgrade on an existing DB)
+flask db stamp head
+```
+
+Fresh installations: the Docker entrypoint runs `flask db upgrade` automatically.
+No manual steps needed.
