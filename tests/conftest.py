@@ -32,9 +32,11 @@ def app():
 
 @pytest.fixture(scope="session")
 def db(app):
-    """Create all tables for the test session."""
+    """Run all migrations (tables + views) for the test session."""
+    from flask_migrate import upgrade
+
     with app.app_context():
-        _db.create_all()
+        upgrade()
         yield _db
         _db.session.remove()
         _db.engine.dispose()

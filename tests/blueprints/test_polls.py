@@ -9,31 +9,28 @@ from app.services.poll_services import create_poll
 
 @pytest.fixture()
 def poll_author(app, db):
-    with app.app_context():
-        person = Person(
-            first_name="Poll",
-            last_name="Author",
-            email=f"pollauthor_{uuid.uuid4().hex[:8]}@test.invalid",
-        )
-        _db.session.add(person)
-        _db.session.commit()
-        yield person
+    person = Person(
+        first_name="Poll",
+        last_name="Author",
+        email=f"pollauthor_{uuid.uuid4().hex[:8]}@test.invalid",
+    )
+    _db.session.add(person)
+    _db.session.commit()
+    yield person
 
 
 @pytest.fixture()
 def open_poll(app, db, poll_author):
-    with app.app_context():
-        poll = create_poll("Best Day?", None, ["Friday", "Saturday"], poll_author.id, False)
-        yield poll
+    poll = create_poll("Best Day?", None, ["Friday", "Saturday"], poll_author.id, False)
+    yield poll
 
 
 @pytest.fixture()
 def closed_poll(app, db, poll_author):
-    with app.app_context():
-        poll = create_poll("Old Poll", None, ["A", "B"], poll_author.id, False)
-        poll.closed = True
-        _db.session.commit()
-        yield poll
+    poll = create_poll("Old Poll", None, ["A", "B"], poll_author.id, False)
+    poll.closed = True
+    _db.session.commit()
+    yield poll
 
 
 def test_poll_page_loads(client, open_poll):

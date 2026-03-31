@@ -5,7 +5,7 @@ import pytest
 # Verify exact paths with: flask routes
 REDIRECT_ROUTES = [
     "/",
-    "/games/",
+    "/games",
     "/wishlist",  # games.wishlist — no /games/ prefix
     "/user_stats",  # games.user_stats — no /games/ prefix
 ]
