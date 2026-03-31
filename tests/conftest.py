@@ -10,6 +10,7 @@ from app.extensions import db as _db
 
 class TestConfig(Config):
     TESTING = True
+    SECRET_KEY = "test-secret-key"
     SESSION_TYPE = "null"
     WTF_CSRF_ENABLED = False
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL")
@@ -58,27 +59,26 @@ def auth_client(app, db):
     from app.extensions import bcrypt
     from app.models import Person
 
-    with app.app_context():
-        Person.query.filter_by(email="test@example.com").delete()
-        _db.session.commit()
+    Person.query.filter_by(email="test@example.com").delete()
+    _db.session.commit()
 
-        user = Person(
-            first_name="Test",
-            last_name="User",
-            email="test@example.com",
-            password=bcrypt.generate_password_hash("password", rounds=4).decode("utf-8"),
-            admin=False,
-            owner=False,
-        )
-        _db.session.add(user)
-        _db.session.commit()
+    user = Person(
+        first_name="Test",
+        last_name="User",
+        email="test@example.com",
+        password=bcrypt.generate_password_hash("password", rounds=4).decode("utf-8"),
+        admin=False,
+        owner=False,
+    )
+    _db.session.add(user)
+    _db.session.commit()
 
-        with app.test_client() as client:
-            client.post("/login", data={"email": "test@example.com", "password": "password"})
-            yield client
+    with app.test_client() as client:
+        client.post("/login", data={"email": "test@example.com", "password": "password"})
+        yield client
 
-        Person.query.filter_by(email="test@example.com").delete()
-        _db.session.commit()
+    Person.query.filter_by(email="test@example.com").delete()
+    _db.session.commit()
 
 
 @pytest.fixture()
@@ -87,27 +87,26 @@ def admin_client(app, db):
     from app.extensions import bcrypt
     from app.models import Person
 
-    with app.app_context():
-        Person.query.filter_by(email="admin@example.com").delete()
-        _db.session.commit()
+    Person.query.filter_by(email="admin@example.com").delete()
+    _db.session.commit()
 
-        admin = Person(
-            first_name="Admin",
-            last_name="User",
-            email="admin@example.com",
-            password=bcrypt.generate_password_hash("password", rounds=4).decode("utf-8"),
-            admin=True,
-            owner=False,
-        )
-        _db.session.add(admin)
-        _db.session.commit()
+    admin = Person(
+        first_name="Admin",
+        last_name="User",
+        email="admin@example.com",
+        password=bcrypt.generate_password_hash("password", rounds=4).decode("utf-8"),
+        admin=True,
+        owner=False,
+    )
+    _db.session.add(admin)
+    _db.session.commit()
 
-        with app.test_client() as client:
-            client.post("/login", data={"email": "admin@example.com", "password": "password"})
-            yield client
+    with app.test_client() as client:
+        client.post("/login", data={"email": "admin@example.com", "password": "password"})
+        yield client
 
-        Person.query.filter_by(email="admin@example.com").delete()
-        _db.session.commit()
+    Person.query.filter_by(email="admin@example.com").delete()
+    _db.session.commit()
 
 
 @pytest.fixture(scope="session")
@@ -117,17 +116,16 @@ def seed_data(db, app):
 
     from app.models import Game, GameNight
 
-    with app.app_context():
-        game = Game(name="Test Game", bgg_id=1)
-        _db.session.add(game)
-        _db.session.flush()
+    game = Game(name="Test Game", bgg_id=1)
+    _db.session.add(game)
+    _db.session.flush()
 
-        game_night = GameNight(date=datetime.date.today())
-        _db.session.add(game_night)
-        _db.session.commit()
+    game_night = GameNight(date=datetime.date.today())
+    _db.session.add(game_night)
+    _db.session.commit()
 
-        yield {"game_id": game.id, "game_night_id": game_night.id}
+    yield {"game_id": game.id, "game_night_id": game_night.id}
 
-        _db.session.delete(game_night)
-        _db.session.delete(game)
-        _db.session.commit()
+    _db.session.delete(game_night)
+    _db.session.delete(game)
+    _db.session.commit()
