@@ -12,9 +12,10 @@ class TestConfig(Config):
     TESTING = True
     SECRET_KEY = "test-secret-key"
     WTF_CSRF_ENABLED = False
-    # Flask-Login sets LOGIN_DISABLED=True when TESTING=True, which bypasses
-    # @login_required and makes current_user.is_authenticated always True.
-    # Override so auth behaviour is real in tests.
+    # Flask-Login 0.6.x caches _login_user in Flask's g (app-context-scoped).
+    # Our session-scoped db fixture holds one AppContext open, so test client
+    # requests reuse it. Without LOGIN_DISABLED=False, @login_required is
+    # bypassed entirely because Flask-Login reads TESTING=True and skips it.
     LOGIN_DISABLED = False
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL")
     BCRYPT_LOG_ROUNDS = 4  # fast hashing in tests
@@ -44,6 +45,23 @@ def db(app):
         yield _db
         _db.session.remove()
         _db.engine.dispose()
+
+
+@pytest.fixture(autouse=True)
+def _clear_flask_login_cache(db):
+    """Clear Flask-Login's g-cached user before each test.
+
+    Flask-Login 0.6.x caches _login_user in g, which is tied to the AppContext.
+    Our session-scoped db fixture holds one AppContext open for the whole session,
+    so test client requests reuse it and see stale _login_user from previous tests.
+    Clearing it forces _load_user() to re-check the session on each test's first
+    request, giving each test a clean auth slate.
+    """
+    from flask import g
+
+    g.pop("_login_user", None)
+    yield
+    g.pop("_login_user", None)
 
 
 @pytest.fixture()
@@ -90,10 +108,13 @@ def admin_client(app, db):
     from app.models import Person, Poll
 
     _db.session.rollback()
-    # Delete polls created by this admin before deleting the person (FK constraint).
+    # Must delete polls (and their cascade children) before deleting the person.
+    # Bulk .delete() bypasses ORM cascade; load and session.delete() triggers it.
     existing = Person.query.filter_by(email="admin@example.com").first()
     if existing:
-        Poll.query.filter_by(created_by=existing.id).delete()
+        for poll in Poll.query.filter_by(created_by=existing.id).all():
+            _db.session.delete(poll)
+        _db.session.flush()
         _db.session.delete(existing)
         _db.session.commit()
 
@@ -115,7 +136,9 @@ def admin_client(app, db):
     _db.session.rollback()
     existing = Person.query.filter_by(email="admin@example.com").first()
     if existing:
-        Poll.query.filter_by(created_by=existing.id).delete()
+        for poll in Poll.query.filter_by(created_by=existing.id).all():
+            _db.session.delete(poll)
+        _db.session.flush()
         _db.session.delete(existing)
         _db.session.commit()
 
