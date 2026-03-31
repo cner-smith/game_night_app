@@ -85,7 +85,7 @@ def submit_response(
         if has_responded(poll, person_id, normalised_name):
             return False, "You have already responded to this poll."
 
-    valid_ids = {opt.id for opt in poll.options}
+    valid_ids = {opt.id for opt in poll.options}  # type: ignore[attr-defined]
     for oid in option_ids:
         if oid not in valid_ids:
             return False, "Invalid option selected."
@@ -107,7 +107,7 @@ def submit_response(
 def get_results(poll: Poll) -> list[dict]:
     """Return response counts per option, sorted by display_order."""
     results = []
-    for option in poll.options:
+    for option in poll.options:  # type: ignore[attr-defined]
         count = PollResponse.query.filter_by(poll_id=poll.id, option_id=option.id).count()
         results.append({"option_id": option.id, "label": option.label, "count": count})
     return results
