@@ -12,6 +12,10 @@ class TestConfig(Config):
     TESTING = True
     SECRET_KEY = "test-secret-key"
     WTF_CSRF_ENABLED = False
+    # Flask-Login sets LOGIN_DISABLED=True when TESTING=True, which bypasses
+    # @login_required and makes current_user.is_authenticated always True.
+    # Override so auth behaviour is real in tests.
+    LOGIN_DISABLED = False
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL")
     BCRYPT_LOG_ROUNDS = 4  # fast hashing in tests
 
@@ -55,6 +59,7 @@ def auth_client(app, db):
     from app.extensions import bcrypt
     from app.models import Person
 
+    _db.session.rollback()
     Person.query.filter_by(email="test@example.com").delete()
     _db.session.commit()
 
@@ -73,6 +78,7 @@ def auth_client(app, db):
         client.post("/login", data={"email": "test@example.com", "password": "password"})
         yield client
 
+    _db.session.rollback()
     Person.query.filter_by(email="test@example.com").delete()
     _db.session.commit()
 
@@ -81,10 +87,15 @@ def auth_client(app, db):
 def admin_client(app, db):
     """Test client pre-logged-in as an admin user."""
     from app.extensions import bcrypt
-    from app.models import Person
+    from app.models import Person, Poll
 
-    Person.query.filter_by(email="admin@example.com").delete()
-    _db.session.commit()
+    _db.session.rollback()
+    # Delete polls created by this admin before deleting the person (FK constraint).
+    existing = Person.query.filter_by(email="admin@example.com").first()
+    if existing:
+        Poll.query.filter_by(created_by=existing.id).delete()
+        _db.session.delete(existing)
+        _db.session.commit()
 
     admin = Person(
         first_name="Admin",
@@ -101,8 +112,12 @@ def admin_client(app, db):
         client.post("/login", data={"email": "admin@example.com", "password": "password"})
         yield client
 
-    Person.query.filter_by(email="admin@example.com").delete()
-    _db.session.commit()
+    _db.session.rollback()
+    existing = Person.query.filter_by(email="admin@example.com").first()
+    if existing:
+        Poll.query.filter_by(created_by=existing.id).delete()
+        _db.session.delete(existing)
+        _db.session.commit()
 
 
 @pytest.fixture(scope="session")
