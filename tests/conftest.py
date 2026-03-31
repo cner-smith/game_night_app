@@ -12,15 +12,12 @@ class TestConfig(Config):
     TESTING = True
     SESSION_TYPE = "null"
     WTF_CSRF_ENABLED = False
+    SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL")
 
 
 @pytest.fixture(scope="session")
 def app():
     """Create a test Flask app using the test PostgreSQL database."""
-    os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
-    os.environ["FLASK_DEBUG"] = "1"
-    os.environ["SECRET_KEY"] = "test-secret-key"
-
     # Patch APScheduler before create_app() — background threads fire during teardown
     # and hit a closed DB connection, causing noisy errors in CI logs.
     with unittest.mock.patch("app.start_schedulers"):
