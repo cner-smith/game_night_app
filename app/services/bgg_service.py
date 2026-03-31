@@ -2,10 +2,10 @@ import logging
 import os
 import threading
 import time
-import defusedxml.ElementTree as ET
 from typing import Any
 
 import cachetools
+import defusedxml.ElementTree as ET
 import requests
 
 logger = logging.getLogger(__name__)
