@@ -10,3 +10,4 @@ from .voting import voting_bp
 from .reminders import reminders_bp
 from .main import main_bp
 from .api import api_bp
+from .polls import polls_bp

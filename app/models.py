@@ -231,6 +231,59 @@ class GameNightNominationsVotes(db.Model):  # SQL View
     game_night_id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, primary_key=True)
     game_name = db.Column(db.String, nullable=False)
-    image_url = db.Column(db.String, nullable=True) 
+    image_url = db.Column(db.String, nullable=True)
     total_nominations = db.Column(db.Integer, nullable=False)
     vote_score = db.Column(db.Integer, nullable=False)
+
+
+import secrets as _secrets  # noqa: E402
+
+
+class Poll(db.Model):
+    __tablename__ = "polls"
+
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.Text, nullable=False)
+    description = db.Column(db.Text)
+    created_by = db.Column(db.Integer, db.ForeignKey("people.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=func.current_timestamp())
+    closes_at = db.Column(db.DateTime, nullable=True)
+    closed = db.Column(db.Boolean, default=False, nullable=False)
+    token = db.Column(db.Text, unique=True, nullable=False)
+    multi_select = db.Column(db.Boolean, default=False, nullable=False)
+
+    creator = db.relationship("Person", foreign_keys=[created_by])
+    options = db.relationship("PollOption", back_populates="poll", cascade="all, delete-orphan",
+                              order_by="PollOption.display_order")
+    responses = db.relationship("PollResponse", back_populates="poll", cascade="all, delete-orphan")
+
+    @staticmethod
+    def generate_token() -> str:
+        return _secrets.token_urlsafe(16)
+
+
+class PollOption(db.Model):
+    __tablename__ = "poll_options"
+
+    id = db.Column(db.Integer, primary_key=True)
+    poll_id = db.Column(db.Integer, db.ForeignKey("polls.id"), nullable=False)
+    label = db.Column(db.Text, nullable=False)
+    display_order = db.Column(db.Integer, default=0, nullable=False)
+
+    poll = db.relationship("Poll", back_populates="options")
+    responses = db.relationship("PollResponse", back_populates="option", cascade="all, delete-orphan")
+
+
+class PollResponse(db.Model):
+    __tablename__ = "poll_responses"
+
+    id = db.Column(db.Integer, primary_key=True)
+    poll_id = db.Column(db.Integer, db.ForeignKey("polls.id"), nullable=False)
+    option_id = db.Column(db.Integer, db.ForeignKey("poll_options.id"), nullable=False)
+    person_id = db.Column(db.Integer, db.ForeignKey("people.id"), nullable=True)
+    respondent_name = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=func.current_timestamp())
+
+    poll = db.relationship("Poll", back_populates="responses")
+    option = db.relationship("PollOption", back_populates="responses")
+    person = db.relationship("Person")
