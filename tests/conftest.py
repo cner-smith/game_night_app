@@ -59,7 +59,7 @@ def auth_client(app, db):
             first_name="Test",
             last_name="User",
             email="test@example.com",
-            password=bcrypt.generate_password_hash("password").decode("utf-8"),
+            password=bcrypt.generate_password_hash("password", rounds=4).decode("utf-8"),
             admin=False,
             owner=False,
         )
@@ -88,7 +88,7 @@ def admin_client(app, db):
             first_name="Admin",
             last_name="User",
             email="admin@example.com",
-            password=bcrypt.generate_password_hash("password").decode("utf-8"),
+            password=bcrypt.generate_password_hash("password", rounds=4).decode("utf-8"),
             admin=True,
             owner=False,
         )
