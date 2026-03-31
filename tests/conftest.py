@@ -13,6 +13,7 @@ class TestConfig(Config):
     SESSION_TYPE = "null"
     WTF_CSRF_ENABLED = False
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL")
+    BCRYPT_LOG_ROUNDS = 4  # fast hashing in tests
 
 
 @pytest.fixture(scope="session")
