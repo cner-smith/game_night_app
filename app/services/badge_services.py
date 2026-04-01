@@ -42,10 +42,33 @@ _NIGHT_LINKED = {
 # ---------------------------------------------------------------------------
 
 def _check_first_blood(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    return (
+        db.session.query(Result)
+        .join(Player, Result.player_id == Player.id)
+        .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
+        .join(GameNight, GameNightGame.game_night_id == GameNight.id)
+        .filter(
+            Player.people_id == person_id,
+            Result.position == 1,
+            GameNight.final.is_(True),
+        )
+        .first()
+    ) is not None
+
 
 def _check_hat_trick(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    wins = (
+        db.session.query(func.count(Result.id))
+        .join(Player, Result.player_id == Player.id)
+        .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNightGame.game_night_id == game_night_id,
+            Result.position == 1,
+        )
+        .scalar()
+    )
+    return (wins or 0) >= 3
 
 def _check_veteran(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
@@ -72,13 +95,55 @@ def _check_gracious_host(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_jack_of_all_trades(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    person_results = (
+        db.session.query(GameNightGame.id.label("gng_id"), Result.position)
+        .join(Result, GameNightGame.id == Result.game_night_game_id)
+        .join(Player, Result.player_id == Player.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNightGame.game_night_id == game_night_id,
+            Result.position.isnot(None),
+        )
+        .all()
+    )
+    if not person_results:
+        return False
+    for row in person_results:
+        total = (
+            db.session.query(func.count(Result.id))
+            .filter(Result.game_night_game_id == row.gng_id, Result.position.isnot(None))
+            .scalar()
+        )
+        if row.position > (total + 1) // 2:
+            return False
+    return True
 
 def _check_upset_special(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_bench_warmer(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    person_results = (
+        db.session.query(GameNightGame.id.label("gng_id"), Result.position)
+        .join(Result, GameNightGame.id == Result.game_night_game_id)
+        .join(Player, Result.player_id == Player.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNightGame.game_night_id == game_night_id,
+            Result.position.isnot(None),
+        )
+        .all()
+    )
+    if not person_results:
+        return False
+    for row in person_results:
+        max_pos = (
+            db.session.query(func.max(Result.position))
+            .filter(Result.game_night_game_id == row.gng_id, Result.position.isnot(None))
+            .scalar()
+        )
+        if row.position != max_pos:
+            return False
+    return True
 
 def _check_grudge_match(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
@@ -87,13 +152,36 @@ def _check_the_closer(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_opening_night(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    first_night = GameNight.query.order_by(GameNight.id).first()
+    if first_night is None or first_night.id != game_night_id:
+        return False
+    return (
+        Player.query.filter_by(game_night_id=game_night_id, people_id=person_id).first()
+        is not None
+    )
 
 def _check_winning_streak(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_the_diplomat(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    if not Player.query.filter_by(game_night_id=game_night_id, people_id=person_id).first():
+        return False
+    games = GameNightGame.query.filter_by(game_night_id=game_night_id).all()
+    if not games:
+        return False
+    for gng in games:
+        non_first = (
+            db.session.query(Result)
+            .filter(
+                Result.game_night_game_id == gng.id,
+                Result.position != 1,
+                Result.position.isnot(None),
+            )
+            .first()
+        )
+        if non_first:
+            return False
+    return True
 
 def _check_early_bird(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
