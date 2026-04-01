@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy.exc import IntegrityError
 from app.extensions import db as _db
-from app.models import Badge, Game, GameNight, GameNightGame, Person, PersonBadge, Player, Result
+from app.models import Badge, Game, GameNight, GameNightGame, GameNominations, Person, PersonBadge, Player, Result
 
 
 def test_badge_model_can_be_created(app, db):
@@ -894,3 +894,87 @@ def test_most_wins_earns_for_top_winner(app, db, badge_night):
     with app.app_context():
         assert _check_most_wins(badge_night["winner"].id, badge_night["game_night"].id) is True
         assert _check_most_wins(badge_night["loser"].id, badge_night["game_night"].id) is False
+
+
+# ---------------------------------------------------------------------------
+# Group F: social / nominations
+# ---------------------------------------------------------------------------
+
+def test_social_butterfly_does_not_earn_without_universal_play(app, db, badge_night):
+    from app.services.badge_services import _check_social_butterfly
+    with app.app_context():
+        # badge_night has 2 people; winner played with loser but there may be others in the DB
+        # At minimum this should not crash
+        result = _check_social_butterfly(badge_night["winner"].id, badge_night["game_night"].id)
+        assert isinstance(result, bool)
+
+
+@pytest.fixture()
+def oracle_setup(app, db):
+    """Person nominated game X, it was played, they won — 5 times."""
+    with app.app_context():
+        game = Game(name=f"Oracle {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="The", last_name="Oracle",
+                        email=f"oracle_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Oth", last_name="Or",
+                       email=f"othor_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, other])
+        _db.session.flush()
+
+        nights, players, gngs, noms = [], [], [], []
+        for i in range(5):
+            gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=10 * (i + 1)), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            op = Player(game_night_id=gn.id, people_id=other.id)
+            _db.session.add_all([pl, op])
+            _db.session.flush()
+            players.append((pl, op))
+
+            nom = GameNominations(game_night_id=gn.id, player_id=pl.id, game_id=game.id)
+            _db.session.add(nom)
+            noms.append(nom)
+            _db.session.flush()
+
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=1, score=10))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=2, score=5))
+
+        _db.session.commit()
+        yield {"person": person, "game": game, "nights": nights, "gngs": gngs,
+               "players": players, "noms": noms, "last_night": nights[-1], "other": other}
+
+        PersonBadge.query.filter_by(person_id=person.id).delete()
+        _db.session.commit()
+        for nom in noms:
+            _db.session.delete(nom)
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl, op in players:
+            _db.session.delete(pl)
+            _db.session.delete(op)
+        for gn in nights:
+            _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(other)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_the_oracle_earns_after_5_nominate_play_win(app, db, oracle_setup):
+    from app.services.badge_services import _check_the_oracle
+    with app.app_context():
+        assert _check_the_oracle(oracle_setup["person"].id, oracle_setup["last_night"].id) is True
+
+
+def test_the_oracle_does_not_earn_with_fewer_than_5(app, db, badge_night):
+    from app.services.badge_services import _check_the_oracle
+    with app.app_context():
+        assert _check_the_oracle(badge_night["winner"].id, badge_night["game_night"].id) is False

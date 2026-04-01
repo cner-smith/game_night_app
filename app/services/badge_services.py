@@ -560,10 +560,53 @@ def _check_dark_horse(person_id: int, game_night_id: int) -> bool:
     return results[-1].position == 1
 
 def _check_social_butterfly(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    all_people_count = Person.query.count()
+    distinct_partners = (
+        db.session.query(func.count(func.distinct(Player.people_id)))
+        .join(Result, Player.id == Result.player_id)
+        .filter(
+            Player.people_id != person_id,
+            Result.game_night_game_id.in_(
+                db.session.query(Result.game_night_game_id)
+                .join(Player, Result.player_id == Player.id)
+                .filter(Player.people_id == person_id)
+            ),
+        )
+        .scalar()
+    )
+    return (distinct_partners or 0) >= all_people_count - 1
+
 
 def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    finalized_nights = (
+        db.session.query(GameNight.id).filter(GameNight.final.is_(True)).all()
+    )
+    oracle_count = 0
+    for (nid,) in finalized_nights:
+        nominations = (
+            db.session.query(GameNominations.game_id)
+            .join(Player, GameNominations.player_id == Player.id)
+            .filter(Player.people_id == person_id, GameNominations.game_night_id == nid)
+            .all()
+        )
+        for (game_id,) in nominations:
+            played = GameNightGame.query.filter_by(game_night_id=nid, game_id=game_id).first()
+            if not played:
+                continue
+            won = (
+                db.session.query(Result)
+                .join(Player, Result.player_id == Player.id)
+                .filter(
+                    Player.people_id == person_id,
+                    Result.game_night_game_id == played.id,
+                    Result.position == 1,
+                )
+                .first()
+            )
+            if won:
+                oracle_count += 1
+                break
+    return oracle_count >= 5
 
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
     # Person.created_at exists — identify the 5 earliest registered people who attended at least one night
