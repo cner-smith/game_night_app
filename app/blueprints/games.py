@@ -7,7 +7,7 @@ from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.models import Game
-from app.services import games_services, index_services
+from app.services import badge_services, games_services, index_services
 from app.services.bgg_service import BGGService
 from app.utils import admin_required
 
@@ -213,6 +213,7 @@ def user_stats():
         selected_opponent_ids=opponent_ids,
         selected_game_names=selected_games,
         selected_opponent_names=selected_opponents,
+        badges=badge_services.get_person_badges(current_user.id),
     )
 
 

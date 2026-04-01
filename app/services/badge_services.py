@@ -609,16 +609,20 @@ def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
     return oracle_count >= 5
 
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
-    # Person.created_at exists — identify the 5 earliest registered people who attended at least one night
     first_five = (
-        db.session.query(Person.id)
-        .join(Player, Player.people_id == Person.id)
-        .group_by(Person.id)
-        .order_by(func.min(Person.created_at))
+        db.session.query(Player.people_id)
+        .join(GameNight, Player.game_night_id == GameNight.id)
+        .group_by(Player.people_id)
+        .order_by(func.min(GameNight.date))
         .limit(5)
         .subquery()
     )
-    return db.session.query(first_five).filter(first_five.c.id == person_id).first() is not None
+    return (
+        db.session.query(first_five)
+        .filter(first_five.c.people_id == person_id)
+        .first()
+        is not None
+    )
 
 def _check_most_wins(person_id: int, game_night_id: int) -> bool:
     rows = (
