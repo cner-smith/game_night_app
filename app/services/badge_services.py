@@ -80,7 +80,44 @@ def _check_veteran(person_id: int, game_night_id: int) -> bool:
     return (count or 0) >= 25
 
 def _check_kingslayer(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    top = (
+        db.session.query(Player.people_id, func.count(Result.id).label("wins"))
+        .join(Result, Player.id == Result.player_id)
+        .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
+        .join(GameNight, GameNightGame.game_night_id == GameNight.id)
+        .filter(Result.position == 1, GameNight.final.is_(True))
+        .group_by(Player.people_id)
+        .order_by(db.text("wins DESC"))
+        .first()
+    )
+    if not top or top.people_id == person_id:
+        return False
+
+    top_winner_id = top.people_id
+    top_results = {
+        r.game_night_game_id: r.position
+        for r in (
+            db.session.query(Result.game_night_game_id, Result.position)
+            .join(Player, Result.player_id == Player.id)
+            .filter(Player.people_id == top_winner_id, Result.position.isnot(None))
+            .all()
+        )
+    }
+    person_tonight = (
+        db.session.query(Result.game_night_game_id, Result.position)
+        .join(Player, Result.player_id == Player.id)
+        .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNightGame.game_night_id == game_night_id,
+            Result.position.isnot(None),
+        )
+        .all()
+    )
+    for gng_id, pos in person_tonight:
+        if gng_id in top_results and pos < top_results[gng_id]:
+            return True
+    return False
 
 def _check_collector(person_id: int, game_night_id: int) -> bool:
     return OwnedBy.query.filter_by(person_id=person_id).count() >= 10
@@ -97,7 +134,28 @@ def _check_variety_pack(person_id: int, game_night_id: int) -> bool:
     return (count or 0) >= 10
 
 def _check_nemesis(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    person_results = (
+        db.session.query(Result.game_night_game_id, Result.position)
+        .join(Player, Result.player_id == Player.id)
+        .filter(Player.people_id == person_id, Result.position.isnot(None))
+        .all()
+    )
+    nemesis_counts: dict = {}
+    for gng_id, pos in person_results:
+        opponents = (
+            db.session.query(Player.people_id)
+            .join(Result, Player.id == Result.player_id)
+            .filter(
+                Result.game_night_game_id == gng_id,
+                Player.people_id != person_id,
+                Result.position < pos,
+                Result.position.isnot(None),
+            )
+            .all()
+        )
+        for (opp_id,) in opponents:
+            nemesis_counts[opp_id] = nemesis_counts.get(opp_id, 0) + 1
+    return any(count >= 5 for count in nemesis_counts.values())
 
 def _check_redemption_arc(person_id: int, game_night_id: int) -> bool:
     won_tonight = (
@@ -197,7 +255,74 @@ def _check_jack_of_all_trades(person_id: int, game_night_id: int) -> bool:
     return True
 
 def _check_upset_special(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    tonight_gng_ids = [
+        r.id
+        for r in GameNightGame.query.filter_by(game_night_id=game_night_id).all()
+    ]
+    for gng_id in tonight_gng_ids:
+        person_pos = (
+            db.session.query(Result.position)
+            .join(Player, Result.player_id == Player.id)
+            .filter(
+                Player.people_id == person_id,
+                Result.game_night_game_id == gng_id,
+                Result.position.isnot(None),
+            )
+            .scalar()
+        )
+        if person_pos is None:
+            continue
+
+        beaten = (
+            db.session.query(Player.people_id)
+            .join(Result, Player.id == Result.player_id)
+            .filter(
+                Result.game_night_game_id == gng_id,
+                Player.people_id != person_id,
+                Result.position > person_pos,
+                Result.position.isnot(None),
+            )
+            .all()
+        )
+        for (opp_id,) in beaten:
+            prior = (
+                db.session.query(Result.game_night_game_id)
+                .join(Player, Result.player_id == Player.id)
+                .filter(
+                    Player.people_id == opp_id,
+                    Result.game_night_game_id.in_(
+                        db.session.query(Result.game_night_game_id)
+                        .join(Player, Result.player_id == Player.id)
+                        .filter(
+                            Player.people_id == person_id,
+                            Result.game_night_game_id.notin_(tonight_gng_ids),
+                        )
+                    ),
+                )
+                .all()
+            )
+            if len(prior) < 5:
+                continue
+            prior_gng_ids = [r.game_night_game_id for r in prior]
+            opp_wins = 0
+            for pgng_id in prior_gng_ids:
+                p_pos = (
+                    db.session.query(Result.position)
+                    .join(Player, Result.player_id == Player.id)
+                    .filter(Player.people_id == person_id, Result.game_night_game_id == pgng_id)
+                    .scalar()
+                )
+                o_pos = (
+                    db.session.query(Result.position)
+                    .join(Player, Result.player_id == Player.id)
+                    .filter(Player.people_id == opp_id, Result.game_night_game_id == pgng_id)
+                    .scalar()
+                )
+                if p_pos and o_pos and o_pos < p_pos:
+                    opp_wins += 1
+            if opp_wins / len(prior_gng_ids) >= 0.8:
+                return True
+    return False
 
 def _check_bench_warmer(person_id: int, game_night_id: int) -> bool:
     person_results = (
@@ -224,7 +349,35 @@ def _check_bench_warmer(person_id: int, game_night_id: int) -> bool:
     return True
 
 def _check_grudge_match(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    person_gng_ids = [
+        r.game_night_game_id
+        for r in (
+            db.session.query(Result.game_night_game_id)
+            .join(Player, Result.player_id == Player.id)
+            .filter(Player.people_id == person_id)
+            .all()
+        )
+    ]
+    if not person_gng_ids:
+        return False
+
+    result = (
+        db.session.query(
+            GameNightGame.game_id,
+            Player.people_id.label("opponent_id"),
+            func.count(GameNightGame.id).label("shared"),
+        )
+        .join(Result, GameNightGame.id == Result.game_night_game_id)
+        .join(Player, Result.player_id == Player.id)
+        .filter(
+            GameNightGame.id.in_(person_gng_ids),
+            Player.people_id != person_id,
+        )
+        .group_by(GameNightGame.game_id, Player.people_id)
+        .having(func.count(GameNightGame.id) >= 10)
+        .first()
+    )
+    return result is not None
 
 def _check_the_closer(person_id: int, game_night_id: int) -> bool:
     attended = (
@@ -425,7 +578,23 @@ def _check_founding_member(person_id: int, game_night_id: int) -> bool:
     return db.session.query(first_five).filter(first_five.c.id == person_id).first() is not None
 
 def _check_most_wins(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    rows = (
+        db.session.query(Player.people_id, func.count(Result.id).label("wins"))
+        .join(Result, Player.id == Result.player_id)
+        .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
+        .join(GameNight, GameNightGame.game_night_id == GameNight.id)
+        .filter(Result.position == 1, GameNight.final.is_(True))
+        .group_by(Player.people_id)
+        .order_by(db.text("wins DESC"))
+        .all()
+    )
+    if not rows:
+        return False
+    max_wins = rows[0].wins
+    if max_wins == 0:
+        return False
+    person_wins = next((r.wins for r in rows if r.people_id == person_id), 0)
+    return person_wins == max_wins
 
 
 def _stub(person_id: int, game_night_id: int) -> bool:

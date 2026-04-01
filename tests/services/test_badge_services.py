@@ -805,3 +805,92 @@ def test_the_closer_does_not_earn_with_only_3_nights(app, db, streak_setup):
     from app.services.badge_services import _check_the_closer
     with app.app_context():
         assert _check_the_closer(streak_setup["person"].id, streak_setup["last_night"].id) is False
+
+
+# ---------------------------------------------------------------------------
+# Group E: cross-player
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def nemesis_setup(app, db):
+    """Opponent beats person in same game 5 times."""
+    with app.app_context():
+        game = Game(name=f"Nem {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Nem", last_name="Victim",
+                        email=f"nem_v_{uuid.uuid4().hex[:6]}@test.invalid")
+        bully = Person(first_name="Nem", last_name="Bully",
+                       email=f"nem_b_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, bully])
+        _db.session.flush()
+
+        nights, players, gngs = [], [], []
+        for i in range(5):
+            gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=10 * (i + 1)), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+
+            vp = Player(game_night_id=gn.id, people_id=person.id)
+            bp = Player(game_night_id=gn.id, people_id=bully.id)
+            _db.session.add_all([vp, bp])
+            _db.session.flush()
+            players.append((vp, bp))
+
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=bp.id, position=1, score=10))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=vp.id, position=2, score=5))
+
+        _db.session.commit()
+        yield {"person": person, "bully": bully, "game": game,
+               "nights": nights, "gngs": gngs, "players": players, "last_night": nights[-1]}
+
+        PersonBadge.query.filter_by(person_id=person.id).delete()
+        PersonBadge.query.filter_by(person_id=bully.id).delete()
+        _db.session.commit()
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for vp, bp in players:
+            _db.session.delete(vp)
+            _db.session.delete(bp)
+        for gn in nights:
+            _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(bully)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_nemesis_earns_after_5_losses_to_same_person(app, db, nemesis_setup):
+    from app.services.badge_services import _check_nemesis
+    with app.app_context():
+        assert _check_nemesis(nemesis_setup["person"].id, nemesis_setup["last_night"].id) is True
+
+
+def test_nemesis_does_not_earn_for_bully(app, db, nemesis_setup):
+    from app.services.badge_services import _check_nemesis
+    with app.app_context():
+        assert _check_nemesis(nemesis_setup["bully"].id, nemesis_setup["last_night"].id) is False
+
+
+def test_kingslayer_earns_when_beating_top_winner(app, db, badge_night):
+    from app.services.badge_services import _check_kingslayer
+    with app.app_context():
+        assert _check_kingslayer(badge_night["loser"].id, badge_night["game_night"].id) is False
+        assert _check_kingslayer(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+def test_grudge_match_does_not_earn_before_10_shared_games(app, db, badge_night):
+    from app.services.badge_services import _check_grudge_match
+    with app.app_context():
+        assert _check_grudge_match(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+def test_most_wins_earns_for_top_winner(app, db, badge_night):
+    from app.services.badge_services import _check_most_wins
+    with app.app_context():
+        assert _check_most_wins(badge_night["winner"].id, badge_night["game_night"].id) is True
+        assert _check_most_wins(badge_night["loser"].id, badge_night["game_night"].id) is False
