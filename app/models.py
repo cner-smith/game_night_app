@@ -44,6 +44,7 @@ class Person(db.Model, UserMixin):
         "Wishlist", back_populates="person", cascade="all, delete-orphan"
     )
     ratings = relationship("GameRatings", back_populates="person", cascade="all, delete-orphan")
+    person_badges = relationship("PersonBadge", back_populates="person", cascade="all, delete-orphan")
 
     @property
     def is_admin_or_owner(self):
@@ -327,3 +328,30 @@ class PollResponse(db.Model):
     poll = db.relationship("Poll", back_populates="responses")
     option = db.relationship("PollOption", back_populates="responses")
     person = db.relationship("Person")
+
+
+class Badge(db.Model):
+    __tablename__ = "badges"
+
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String, unique=True, nullable=False)
+    name = db.Column(db.String, nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    icon = db.Column(db.String, nullable=False)
+
+    person_badges = relationship("PersonBadge", back_populates="badge")
+
+
+class PersonBadge(db.Model):
+    __tablename__ = "person_badges"
+    __table_args__ = (db.UniqueConstraint("person_id", "badge_id", name="uq_person_badge"),)
+
+    id = db.Column(db.Integer, primary_key=True)
+    person_id = db.Column(db.Integer, db.ForeignKey("people.id"), nullable=False)
+    badge_id = db.Column(db.Integer, db.ForeignKey("badges.id"), nullable=False)
+    earned_at = db.Column(db.DateTime, server_default=func.now(), nullable=False)
+    game_night_id = db.Column(db.Integer, db.ForeignKey("gamenights.id"), nullable=True)
+
+    person = relationship("Person", back_populates="person_badges")
+    badge = relationship("Badge", back_populates="person_badges")
+    game_night = relationship("GameNight")
