@@ -86,7 +86,35 @@ def _check_nemesis(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_redemption_arc(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    won_tonight = (
+        db.session.query(GameNightGame.game_id)
+        .join(Result, GameNightGame.id == Result.game_night_game_id)
+        .join(Player, Result.player_id == Player.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNightGame.game_night_id == game_night_id,
+            Result.position == 1,
+        )
+        .all()
+    )
+    for (game_id,) in won_tonight:
+        prior_losses = (
+            db.session.query(func.count(Result.id))
+            .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
+            .join(Player, Result.player_id == Player.id)
+            .join(GameNight, GameNightGame.game_night_id == GameNight.id)
+            .filter(
+                Player.people_id == person_id,
+                GameNightGame.game_id == game_id,
+                GameNightGame.game_night_id != game_night_id,
+                Result.position != 1,
+                GameNight.final.is_(True),
+            )
+            .scalar()
+        )
+        if (prior_losses or 0) >= 3:
+            return True
+    return False
 
 def _check_night_owl(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
@@ -187,13 +215,64 @@ def _check_early_bird(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_the_rematch(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    prev_player = (
+        db.session.query(Player)
+        .join(GameNight, Player.game_night_id == GameNight.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNight.id != game_night_id,
+            GameNight.final.is_(True),
+        )
+        .order_by(GameNight.date.desc())
+        .first()
+    )
+    if not prev_player:
+        return False
+
+    current_game_ids = {
+        r.game_id
+        for r in GameNightGame.query.filter_by(game_night_id=game_night_id).all()
+    }
+    prev_game_ids = {
+        r.game_id
+        for r in GameNightGame.query.filter_by(game_night_id=prev_player.game_night_id).all()
+    }
+    return bool(current_game_ids & prev_game_ids)
 
 def _check_century_club(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_dark_horse(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    results = (
+        db.session.query(
+            GameNightGame.round,
+            Result.position,
+            GameNightGame.id.label("gng_id"),
+        )
+        .join(Result, GameNightGame.id == Result.game_night_game_id)
+        .join(Player, Result.player_id == Player.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNightGame.game_night_id == game_night_id,
+            Result.position.isnot(None),
+        )
+        .order_by(GameNightGame.round)
+        .all()
+    )
+    if len(results) < 4:
+        return False
+    for row in results[:3]:
+        max_pos = (
+            db.session.query(func.max(Result.position))
+            .filter(
+                Result.game_night_game_id == row.gng_id,
+                Result.position.isnot(None),
+            )
+            .scalar()
+        )
+        if row.position != max_pos:
+            return False
+    return results[-1].position == 1
 
 def _check_social_butterfly(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)

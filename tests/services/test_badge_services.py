@@ -306,3 +306,205 @@ def test_opening_night_earns_on_first_night(app, db, badge_night):
             assert result is True
         else:
             assert result is False
+
+
+# ---------------------------------------------------------------------------
+# Group B: history-aware single-night badges
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def redemption_setup(app, db):
+    """Player lost game X 3 times, then wins it tonight."""
+    with app.app_context():
+        game = Game(name=f"RGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Red", last_name="Arc",
+                        email=f"red_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Other", last_name="Red",
+                       email=f"other_red_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, other])
+        _db.session.flush()
+
+        nights = []
+        players = []
+        gngs = []
+        for i, (delta, pos) in enumerate([(30, 2), (20, 2), (10, 2), (1, 1)]):
+            gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=delta), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            op = Player(game_night_id=gn.id, people_id=other.id)
+            _db.session.add_all([pl, op])
+            _db.session.flush()
+            players.append(pl)
+
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=pos, score=5))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=1 if pos != 1 else 2, score=10))
+
+        _db.session.commit()
+        tonight = nights[-1]
+        yield {"person": person, "game": game, "tonight": tonight, "nights": nights, "gngs": gngs, "players": players, "other": other}
+
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl in players:
+            _db.session.delete(pl)
+        for gn in nights:
+            # also delete the op Players for each night before deleting the night
+            Player.query.filter_by(game_night_id=gn.id).delete()
+            PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+            _db.session.delete(gn)
+        PersonBadge.query.filter_by(person_id=person.id).delete()
+        _db.session.delete(person)
+        _db.session.delete(other)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_redemption_arc_earns_after_3_losses(app, db, redemption_setup):
+    from app.services.badge_services import _check_redemption_arc
+    with app.app_context():
+        assert _check_redemption_arc(
+            redemption_setup["person"].id,
+            redemption_setup["tonight"].id
+        ) is True
+
+
+def test_redemption_arc_does_not_earn_without_enough_losses(app, db, badge_night):
+    from app.services.badge_services import _check_redemption_arc
+    with app.app_context():
+        assert _check_redemption_arc(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+@pytest.fixture()
+def rematch_setup(app, db):
+    """Player attended two consecutive nights, both including same game."""
+    with app.app_context():
+        game = Game(name=f"RM {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Re", last_name="Match",
+                        email=f"rm_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Oth", last_name="RM",
+                       email=f"othrm_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, other])
+        _db.session.flush()
+
+        nights = []
+        players = []
+        gngs = []
+        for delta in [5, 1]:
+            gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=delta), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            op = Player(game_night_id=gn.id, people_id=other.id)
+            _db.session.add_all([pl, op])
+            _db.session.flush()
+            players.append((pl, op))
+
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=1, score=10))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=2, score=5))
+
+        _db.session.commit()
+        yield {"person": person, "tonight": nights[-1], "nights": nights, "gngs": gngs, "players": players}
+
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl_pair in players:
+            for pl in pl_pair:
+                _db.session.delete(pl)
+        for gn in nights:
+            PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+            _db.session.delete(gn)
+        PersonBadge.query.filter_by(person_id=person.id).delete()
+        _db.session.delete(person)
+        _db.session.delete(other)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_the_rematch_earns_when_same_game_back_to_back(app, db, rematch_setup):
+    from app.services.badge_services import _check_the_rematch
+    with app.app_context():
+        assert _check_the_rematch(rematch_setup["person"].id, rematch_setup["tonight"].id) is True
+
+
+def test_the_rematch_does_not_earn_on_first_night(app, db, badge_night):
+    from app.services.badge_services import _check_the_rematch
+    with app.app_context():
+        # Only one night exists for this person in badge_night
+        assert _check_the_rematch(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+@pytest.fixture()
+def dark_horse_setup(app, db):
+    """Player loses first 3 games in one night, wins the 4th."""
+    with app.app_context():
+        game = Game(name=f"DH {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Dark", last_name="Horse",
+                        email=f"dh_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Oth", last_name="DH",
+                       email=f"othdh_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, other])
+        _db.session.flush()
+
+        gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=1), final=True)
+        _db.session.add(gn)
+        _db.session.flush()
+
+        pl = Player(game_night_id=gn.id, people_id=person.id)
+        op = Player(game_night_id=gn.id, people_id=other.id)
+        _db.session.add_all([pl, op])
+        _db.session.flush()
+
+        gngs = []
+        positions = [2, 2, 2, 1]  # lose 3, win last
+        for i, pos in enumerate(positions):
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=i + 1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=pos, score=5))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=3 - pos, score=5))
+
+        _db.session.commit()
+        yield {"person": person, "gn": gn, "gngs": gngs, "pl": pl, "op": op, "other": other, "game": game}
+
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        _db.session.delete(pl)
+        _db.session.delete(op)
+        PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+        _db.session.delete(gn)
+        PersonBadge.query.filter_by(person_id=person.id).delete()
+        _db.session.delete(person)
+        _db.session.delete(other)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_dark_horse_earns_after_3_losses_then_win(app, db, dark_horse_setup):
+    from app.services.badge_services import _check_dark_horse
+    with app.app_context():
+        assert _check_dark_horse(dark_horse_setup["person"].id, dark_horse_setup["gn"].id) is True
+
+
+def test_dark_horse_does_not_earn_with_only_3_games(app, db, hat_trick_night):
+    from app.services.badge_services import _check_dark_horse
+    with app.app_context():
+        # hat_trick_night has 3 games, not 4
+        assert _check_dark_horse(hat_trick_night["other"].id, hat_trick_night["gn"].id) is False
