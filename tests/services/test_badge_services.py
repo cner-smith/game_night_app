@@ -674,3 +674,134 @@ def test_founding_member_earns_for_early_players(app, db, multi_night_person):
             multi_night_person["person"].id,
             multi_night_person["last_night"].id
         ) is True
+
+# ---------------------------------------------------------------------------
+# Group D: consecutive streaks
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def streak_setup(app, db):
+    """3 consecutive attended nights, all with a win."""
+    with app.app_context():
+        game = Game(name=f"Streak {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Str", last_name="Eak",
+                        email=f"streak_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Oth", last_name="Stk",
+                       email=f"othstk_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, other])
+        _db.session.flush()
+
+        nights, players, gngs = [], [], []
+        for delta in [10, 5, 1]:
+            gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=delta), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            op = Player(game_night_id=gn.id, people_id=other.id)
+            _db.session.add_all([pl, op])
+            _db.session.flush()
+            players.append((pl, op))
+
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=1, score=10))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=2, score=5))
+
+        _db.session.commit()
+        yield {"person": person, "nights": nights, "gngs": gngs, "players": players,
+               "last_night": nights[-1], "game": game, "other": other}
+
+        PersonBadge.query.filter_by(person_id=person.id).delete()
+        _db.session.commit()
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl_pair in players:
+            for pl in pl_pair:
+                _db.session.delete(pl)
+        for gn in nights:
+            _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(other)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_winning_streak_earns_with_3_consecutive_wins(app, db, streak_setup):
+    from app.services.badge_services import _check_winning_streak
+    with app.app_context():
+        assert _check_winning_streak(streak_setup["person"].id, streak_setup["last_night"].id) is True
+
+
+def test_winning_streak_does_not_earn_with_only_1_night(app, db, badge_night):
+    from app.services.badge_services import _check_winning_streak
+    with app.app_context():
+        assert _check_winning_streak(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+@pytest.fixture()
+def closer_setup(app, db):
+    """5 consecutive nights where person wins the last game each time."""
+    with app.app_context():
+        game = Game(name=f"Closer {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="The", last_name="Closer",
+                        email=f"closer_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Oth", last_name="Cls",
+                       email=f"othcls_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, other])
+        _db.session.flush()
+
+        nights, players, gngs = [], [], []
+        for delta in [25, 20, 15, 10, 1]:
+            gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=delta), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            op = Player(game_night_id=gn.id, people_id=other.id)
+            _db.session.add_all([pl, op])
+            _db.session.flush()
+            players.append((pl, op))
+
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=1, score=10))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=2, score=5))
+
+        _db.session.commit()
+        yield {"person": person, "nights": nights, "gngs": gngs, "players": players,
+               "last_night": nights[-1], "game": game, "other": other}
+
+        PersonBadge.query.filter_by(person_id=person.id).delete()
+        _db.session.commit()
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl_pair in players:
+            for pl in pl_pair:
+                _db.session.delete(pl)
+        for gn in nights:
+            _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(other)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_the_closer_earns_with_5_consecutive_last_game_wins(app, db, closer_setup):
+    from app.services.badge_services import _check_the_closer
+    with app.app_context():
+        assert _check_the_closer(closer_setup["person"].id, closer_setup["last_night"].id) is True
+
+
+def test_the_closer_does_not_earn_with_only_3_nights(app, db, streak_setup):
+    from app.services.badge_services import _check_the_closer
+    with app.app_context():
+        assert _check_the_closer(streak_setup["person"].id, streak_setup["last_night"].id) is False

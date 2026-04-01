@@ -227,7 +227,43 @@ def _check_grudge_match(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_the_closer(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    attended = (
+        db.session.query(GameNight.id)
+        .join(Player, GameNight.id == Player.game_night_id)
+        .filter(Player.people_id == person_id, GameNight.final.is_(True))
+        .order_by(GameNight.date)
+        .all()
+    )
+    if len(attended) < 5:
+        return False
+
+    streak = 0
+    for (nid,) in attended:
+        last_game = (
+            GameNightGame.query.filter_by(game_night_id=nid)
+            .order_by(GameNightGame.round.desc())
+            .first()
+        )
+        if not last_game:
+            streak = 0
+            continue
+        won_last = (
+            db.session.query(Result)
+            .join(Player, Result.player_id == Player.id)
+            .filter(
+                Player.people_id == person_id,
+                Result.game_night_game_id == last_game.id,
+                Result.position == 1,
+            )
+            .first()
+        )
+        if won_last:
+            streak += 1
+            if streak >= 5:
+                return True
+        else:
+            streak = 0
+    return False
 
 def _check_opening_night(person_id: int, game_night_id: int) -> bool:
     first_night = GameNight.query.order_by(GameNight.id).first()
@@ -239,7 +275,36 @@ def _check_opening_night(person_id: int, game_night_id: int) -> bool:
     )
 
 def _check_winning_streak(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    attended = (
+        db.session.query(GameNight.id)
+        .join(Player, GameNight.id == Player.game_night_id)
+        .filter(Player.people_id == person_id, GameNight.final.is_(True))
+        .order_by(GameNight.date)
+        .all()
+    )
+    if len(attended) < 3:
+        return False
+
+    streak = 0
+    for (nid,) in attended:
+        won = (
+            db.session.query(Result)
+            .join(Player, Result.player_id == Player.id)
+            .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
+            .filter(
+                Player.people_id == person_id,
+                GameNightGame.game_night_id == nid,
+                Result.position == 1,
+            )
+            .first()
+        )
+        if won:
+            streak += 1
+            if streak >= 3:
+                return True
+        else:
+            streak = 0
+    return False
 
 def _check_the_diplomat(person_id: int, game_night_id: int) -> bool:
     if not Player.query.filter_by(game_night_id=game_night_id, people_id=person_id).first():
