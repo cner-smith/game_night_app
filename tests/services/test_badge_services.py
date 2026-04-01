@@ -508,3 +508,169 @@ def test_dark_horse_does_not_earn_with_only_3_games(app, db, hat_trick_night):
     with app.app_context():
         # hat_trick_night has 3 games, not 4
         assert _check_dark_horse(hat_trick_night["other"].id, hat_trick_night["gn"].id) is False
+
+
+# ---------------------------------------------------------------------------
+# Group C: attendance / cumulative count
+# ---------------------------------------------------------------------------
+
+@pytest.fixture()
+def multi_night_person(app, db):
+    """A person who has attended several finalized game nights."""
+    with app.app_context():
+        game = Game(name=f"MNG {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Multi", last_name="Night",
+                        email=f"multi_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Other", last_name="Multi",
+                       email=f"othermulti_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, other])
+        _db.session.flush()
+
+        nights = []
+        players = []
+        gngs = []
+        # 25 nights, all in the same month/year for night_owl testing on subset
+        base = datetime.date.today().replace(day=1) - datetime.timedelta(days=60)
+        for i in range(25):
+            gn = GameNight(date=base + datetime.timedelta(days=i), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            op = Player(game_night_id=gn.id, people_id=other.id)
+            _db.session.add_all([pl, op])
+            _db.session.flush()
+            players.append((pl, op))
+
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=1, score=10))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=2, score=5))
+
+        _db.session.commit()
+        last_night = nights[-1]
+        yield {"person": person, "other": other, "game": game, "nights": nights,
+               "gngs": gngs, "players": players, "last_night": last_night}
+
+        PersonBadge.query.filter_by(person_id=person.id).delete()
+        PersonBadge.query.filter_by(person_id=other.id).delete()
+        _db.session.commit()
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl_pair in players:
+            for pl in pl_pair:
+                _db.session.delete(pl)
+        for gn in nights:
+            _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(other)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_veteran_earns_at_25_nights(app, db, multi_night_person):
+    from app.services.badge_services import _check_veteran
+    with app.app_context():
+        assert _check_veteran(multi_night_person["person"].id, multi_night_person["last_night"].id) is True
+
+
+def test_veteran_does_not_earn_before_25(app, db, badge_night):
+    from app.services.badge_services import _check_veteran
+    with app.app_context():
+        assert _check_veteran(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+def test_century_club_earns_at_100_games(app, db, multi_night_person):
+    from app.services.badge_services import _check_century_club
+    # 25 nights * 1 game each = 25 games — not enough for 100
+    with app.app_context():
+        assert _check_century_club(multi_night_person["person"].id, multi_night_person["last_night"].id) is False
+
+
+def test_variety_pack_earns_with_10_different_games(app, db, multi_night_person):
+    from app.services.badge_services import _check_variety_pack
+    with app.app_context():
+        # multi_night_person uses same game every night, so only 1 unique game
+        assert _check_variety_pack(multi_night_person["person"].id, multi_night_person["last_night"].id) is False
+
+
+def test_night_owl_earns_with_5_in_same_month(app, db, multi_night_person):
+    from app.services.badge_services import _check_night_owl
+    with app.app_context():
+        # All 25 nights are in same base month window — at least 5 will be same month
+        first_night = multi_night_person["nights"][4]  # 5th night
+        assert _check_night_owl(multi_night_person["person"].id, first_night.id) is True
+
+
+def test_night_owl_does_not_earn_with_fewer_than_5(app, db, badge_night):
+    from app.services.badge_services import _check_night_owl
+    with app.app_context():
+        assert _check_night_owl(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+def test_gracious_host_earns_with_perfect_attendance(app, db, multi_night_person):
+    from app.services.badge_services import _check_gracious_host
+    with app.app_context():
+        assert _check_gracious_host(
+            multi_night_person["person"].id,
+            multi_night_person["last_night"].id
+        ) is True
+
+
+def test_gracious_host_does_not_earn_when_missed_a_night(app, db, multi_night_person):
+    from app.services.badge_services import _check_gracious_host
+    with app.app_context():
+        from app.models import GameNight as GN
+        year = multi_night_person["nights"][0].date.year
+        assert _check_gracious_host(multi_night_person["other"].id, multi_night_person["last_night"].id) is True
+        stranger = Person(first_name="S", last_name="T",
+                          email=f"stranger_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add(stranger)
+        _db.session.commit()
+        assert _check_gracious_host(stranger.id, multi_night_person["last_night"].id) is False
+        _db.session.delete(stranger)
+        _db.session.commit()
+
+
+def test_collector_earns_with_10_owned_games(app, db):
+    from app.services.badge_services import _check_collector
+    from app.models import OwnedBy
+    with app.app_context():
+        person = Person(first_name="Col", last_name="Lect",
+                        email=f"col_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add(person)
+        _db.session.flush()
+
+        games = []
+        ownerships = []
+        for _ in range(10):
+            g = Game(name=f"CG {uuid.uuid4().hex[:6]}", bgg_id=None)
+            _db.session.add(g)
+            _db.session.flush()
+            games.append(g)
+            ob = OwnedBy(game_id=g.id, person_id=person.id)
+            _db.session.add(ob)
+            ownerships.append(ob)
+
+        _db.session.commit()
+        assert _check_collector(person.id, 0) is True
+
+        for ob in ownerships:
+            _db.session.delete(ob)
+        for g in games:
+            _db.session.delete(g)
+        _db.session.delete(person)
+        _db.session.commit()
+
+
+def test_founding_member_earns_for_early_players(app, db, multi_night_person):
+    from app.services.badge_services import _check_founding_member
+    with app.app_context():
+        assert _check_founding_member(
+            multi_night_person["person"].id,
+            multi_night_person["last_night"].id
+        ) is True

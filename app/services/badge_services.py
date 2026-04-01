@@ -71,16 +71,30 @@ def _check_hat_trick(person_id: int, game_night_id: int) -> bool:
     return (wins or 0) >= 3
 
 def _check_veteran(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    count = (
+        db.session.query(func.count(Player.id))
+        .join(GameNight, Player.game_night_id == GameNight.id)
+        .filter(Player.people_id == person_id, GameNight.final.is_(True))
+        .scalar()
+    )
+    return (count or 0) >= 25
 
 def _check_kingslayer(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_collector(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    return OwnedBy.query.filter_by(person_id=person_id).count() >= 10
 
 def _check_variety_pack(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    count = (
+        db.session.query(func.count(func.distinct(GameNightGame.game_id)))
+        .join(Result, GameNightGame.id == Result.game_night_game_id)
+        .join(Player, Result.player_id == Player.id)
+        .join(GameNight, GameNightGame.game_night_id == GameNight.id)
+        .filter(Player.people_id == person_id, GameNight.final.is_(True))
+        .scalar()
+    )
+    return (count or 0) >= 10
 
 def _check_nemesis(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
@@ -117,10 +131,46 @@ def _check_redemption_arc(person_id: int, game_night_id: int) -> bool:
     return False
 
 def _check_night_owl(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    current = db.session.get(GameNight, game_night_id)
+    if not current:
+        return False
+    year, month = current.date.year, current.date.month
+    count = (
+        db.session.query(func.count(Player.id))
+        .join(GameNight, Player.game_night_id == GameNight.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNight.final.is_(True),
+            func.extract("year", GameNight.date) == year,
+            func.extract("month", GameNight.date) == month,
+        )
+        .scalar()
+    )
+    return (count or 0) >= 5
 
 def _check_gracious_host(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    current = db.session.get(GameNight, game_night_id)
+    if not current:
+        return False
+    year = current.date.year
+    total_in_year = (
+        db.session.query(func.count(GameNight.id))
+        .filter(GameNight.final.is_(True), func.extract("year", GameNight.date) == year)
+        .scalar()
+    )
+    if not total_in_year:
+        return False
+    attended_in_year = (
+        db.session.query(func.count(Player.id))
+        .join(GameNight, Player.game_night_id == GameNight.id)
+        .filter(
+            Player.people_id == person_id,
+            GameNight.final.is_(True),
+            func.extract("year", GameNight.date) == year,
+        )
+        .scalar()
+    )
+    return attended_in_year == total_in_year
 
 def _check_jack_of_all_trades(person_id: int, game_night_id: int) -> bool:
     person_results = (
@@ -212,7 +262,16 @@ def _check_the_diplomat(person_id: int, game_night_id: int) -> bool:
     return True
 
 def _check_early_bird(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    # Player.created_at exists — use it to determine who registered first per night
+    all_night_ids = [
+        row[0] for row in db.session.query(Player.game_night_id).distinct().all()
+    ]
+    first_count = 0
+    for nid in all_night_ids:
+        first_player = Player.query.filter_by(game_night_id=nid).order_by(Player.created_at).first()
+        if first_player and first_player.people_id == person_id:
+            first_count += 1
+    return first_count >= 10
 
 def _check_the_rematch(person_id: int, game_night_id: int) -> bool:
     prev_player = (
@@ -240,7 +299,15 @@ def _check_the_rematch(person_id: int, game_night_id: int) -> bool:
     return bool(current_game_ids & prev_game_ids)
 
 def _check_century_club(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    count = (
+        db.session.query(func.count(Result.id))
+        .join(Player, Result.player_id == Player.id)
+        .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
+        .join(GameNight, GameNightGame.game_night_id == GameNight.id)
+        .filter(Player.people_id == person_id, GameNight.final.is_(True))
+        .scalar()
+    )
+    return (count or 0) >= 100
 
 def _check_dark_horse(person_id: int, game_night_id: int) -> bool:
     results = (
@@ -281,7 +348,16 @@ def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
 
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
-    return _stub(person_id, game_night_id)
+    # Person.created_at exists — identify the 5 earliest registered people who attended at least one night
+    first_five = (
+        db.session.query(Person.id)
+        .join(Player, Player.people_id == Person.id)
+        .group_by(Person.id)
+        .order_by(func.min(Person.created_at))
+        .limit(5)
+        .subquery()
+    )
+    return db.session.query(first_five).filter(first_five.c.id == person_id).first() is not None
 
 def _check_most_wins(person_id: int, game_night_id: int) -> bool:
     return _stub(person_id, game_night_id)
