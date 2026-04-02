@@ -1,3 +1,4 @@
+import datetime as dt
 from datetime import datetime
 
 from sqlalchemy import case, distinct, func
@@ -264,6 +265,30 @@ def get_play_stats():
     return {
         row.game_id: {"play_count": row.play_count, "last_played": row.last_played} for row in rows
     }
+
+
+def get_recently_played_games(days=30):
+    """Returns games played within the last N days (final nights only), with play stats."""
+    cutoff = dt.date.today() - dt.timedelta(days=days)
+    rows = (
+        db.session.query(
+            Game,
+            func.count(GameNightGame.id).label("play_count"),
+            func.max(GameNight.date).label("last_played"),
+        )
+        .join(GameNightGame, Game.id == GameNightGame.game_id)
+        .join(GameNight, GameNightGame.game_night_id == GameNight.id)
+        .filter(GameNight.final.is_(True), GameNight.date >= cutoff)
+        .group_by(Game.id)
+        .order_by(func.max(GameNight.date).desc())
+        .all()
+    )
+    result = []
+    for game, play_count, last_played in rows:
+        game.play_count = play_count
+        game.last_played = last_played
+        result.append(game)
+    return result
 
 
 def get_bridesmaid_games():

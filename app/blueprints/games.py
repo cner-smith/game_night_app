@@ -33,11 +33,13 @@ def games_index():
     )
     play_stats = games_services.get_play_stats()
     bridesmaid_games = games_services.get_bridesmaid_games()
+    recently_played = games_services.get_recently_played_games()
 
     context = {
         "games": games_with_ownership,
         "play_stats": play_stats,
         "bridesmaid_games": bridesmaid_games,
+        "recently_played": recently_played,
         "today": date.today(),
     }
     return render_template("games_index.html", **context)
