@@ -1,3 +1,4 @@
+import logging
 from collections import defaultdict
 from datetime import datetime
 
@@ -24,6 +25,8 @@ from app.models import (
     db,
 )
 from app.services.admin_services import get_all_people
+
+logger = logging.getLogger(__name__)
 
 
 def parse_date(date_str):
@@ -166,32 +169,37 @@ def get_log_results_data(game_night_game_id):
     return game_night_game, players, existing_results
 
 
+_TOGGLEABLE_FIELDS = {"final", "closed"}
+
+
 def toggle_game_night_field(game_night_id, field):
     """Toggle boolean fields in a game night (e.g., final results, voting)."""
+    if field not in _TOGGLEABLE_FIELDS:
+        return False, "Invalid field."
+
     game_night = GameNight.query.get_or_404(game_night_id)
+    setattr(game_night, field, not getattr(game_night, field))
 
-    if hasattr(game_night, field):
-        setattr(game_night, field, not getattr(game_night, field))
-        db.session.commit()
+    if field == "final" and getattr(game_night, field) is False:
+        # Clear night-triggered badges so re-finalization starts clean
+        from app.models import PersonBadge
+        PersonBadge.query.filter_by(game_night_id=game_night_id).delete()
 
-        if field == "final" and getattr(game_night, field) is True:
-            try:
-                from app.services.badge_services import evaluate_badges_for_night
+    db.session.commit()
 
-                evaluate_badges_for_night(game_night_id)
-            except Exception:
-                import logging
+    if field == "final" and getattr(game_night, field) is True:
+        try:
+            from app.services.badge_services import evaluate_badges_for_night
+            evaluate_badges_for_night(game_night_id)
+        except Exception:
+            logger.exception(
+                "Badge evaluation failed for game night %s", game_night_id
+            )
 
-                logging.getLogger(__name__).exception(
-                    "Badge evaluation failed for game night %s", game_night_id
-                )
-
-        return (
-            True,
-            f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}.",
-        )
-
-    return False, "Invalid field."
+    return (
+        True,
+        f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}.",
+    )
 
 
 def determine_top_places(game_night_id):

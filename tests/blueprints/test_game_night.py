@@ -110,3 +110,36 @@ def test_finalize_succeeds_even_if_badge_evaluation_raises(admin_client, app, db
     Person.query.filter_by(id=person_id).delete()
     Game.query.filter_by(id=game_id).delete()
     _db.session.commit()
+
+
+def test_toggle_invalid_field_is_rejected(admin_client, app, db):
+    """toggle_game_night_field must reject fields not in the allowlist."""
+    import datetime
+    import uuid
+    from app.extensions import db as _db
+    from app.models import GameNight, Person, Player
+
+    person = Person(first_name="T", last_name="T",
+                    email=f"toggle_{uuid.uuid4().hex[:6]}@test.invalid")
+    _db.session.add(person)
+    _db.session.flush()
+    gn = GameNight(date=datetime.date.today(), final=False)
+    _db.session.add(gn)
+    _db.session.flush()
+    pl = Player(game_night_id=gn.id, people_id=person.id)
+    _db.session.add(pl)
+    _db.session.commit()
+    gn_id, pl_id, person_id = gn.id, pl.id, person.id
+
+    resp = admin_client.post(f"/game_night/{gn_id}/toggle/id")
+    assert resp.status_code in (400, 404, 302)
+
+    # Confirm id was not modified
+    from app.models import GameNight as GN
+    fresh = GN.query.get(gn_id)
+    assert fresh.id == gn_id
+
+    Player.query.filter_by(id=pl_id).delete()
+    GameNight.query.filter_by(id=gn_id).delete()
+    Person.query.filter_by(id=person_id).delete()
+    _db.session.commit()
