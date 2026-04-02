@@ -415,6 +415,10 @@ def get_recap_details(game_night_id):
     raw_badges = (
         PersonBadge.query
         .filter_by(game_night_id=game_night_id)
+        .options(
+            joinedload(PersonBadge.person),
+            joinedload(PersonBadge.badge),
+        )
         .all()
     )
     badges_earned = [
