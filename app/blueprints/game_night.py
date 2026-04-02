@@ -175,3 +175,10 @@ def delete_game_night(game_night_id):
     success, message = game_night_services.delete_game_night(game_night_id)
     flash(message, "success" if success else "error")
     return redirect(url_for("main.index"))
+
+
+@game_night_bp.route("/game_night/<int:game_night_id>/recap")
+def recap_game_night(game_night_id):
+    """Public read-only recap of a completed game night."""
+    details = game_night_services.get_recap_details(game_night_id)
+    return render_template("recap_game_night.html", **details)
