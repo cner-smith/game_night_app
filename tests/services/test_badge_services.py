@@ -253,6 +253,44 @@ def test_bench_warmer_does_not_earn_for_winner(app, db, badge_night):
         assert _check_bench_warmer(badge_night["winner"].id, badge_night["game_night"].id) is False
 
 
+def test_bench_warmer_does_not_earn_in_solo_game(app, db):
+    """bench_warmer must not fire when only one player has a recorded result."""
+    from app.services.badge_services import _check_bench_warmer
+
+    with app.app_context():
+        game = Game(name=f"Solo {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Solo", last_name="Player",
+                        email=f"solo_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person])
+        _db.session.flush()
+
+        gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=2), final=True)
+        _db.session.add(gn)
+        _db.session.flush()
+
+        player = Player(game_night_id=gn.id, people_id=person.id)
+        _db.session.add(player)
+        _db.session.flush()
+
+        gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+        _db.session.add(gng)
+        _db.session.flush()
+
+        _db.session.add(Result(game_night_game_id=gng.id, player_id=player.id, position=1))
+        _db.session.commit()
+
+        assert _check_bench_warmer(person.id, gn.id) is False
+
+        Result.query.filter_by(game_night_game_id=gng.id).delete()
+        _db.session.delete(gng)
+        _db.session.delete(player)
+        PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+        _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
 def test_jack_of_all_trades_earns_when_top_half(app, db, badge_night):
     # badge_night: 2 players, winner is position 1 (top half of 2 = 1)
     from app.services.badge_services import _check_jack_of_all_trades

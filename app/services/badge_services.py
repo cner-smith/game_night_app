@@ -337,7 +337,8 @@ def _check_bench_warmer(person_id: int, game_night_id: int) -> bool:
             .filter(Result.game_night_game_id == row.gng_id, Result.position.isnot(None))
             .scalar()
         )
-        if row.position != max_pos:
+        # max_pos <= 1 means only one player had a result — not truly "last place"
+        if max_pos is None or max_pos <= 1 or row.position != max_pos:
             return False
     return True
 
