@@ -44,7 +44,9 @@ class Person(db.Model, UserMixin):
         "Wishlist", back_populates="person", cascade="all, delete-orphan"
     )
     ratings = relationship("GameRatings", back_populates="person", cascade="all, delete-orphan")
-    person_badges = relationship("PersonBadge", back_populates="person", cascade="all, delete-orphan")
+    person_badges = relationship(
+        "PersonBadge", back_populates="person", cascade="all, delete-orphan"
+    )
 
     @property
     def is_admin_or_owner(self):

@@ -48,6 +48,7 @@ def test_finalize_route_triggers_badge_evaluation(admin_client, app, db):
     assert resp.status_code in (200, 302)
 
     from app.models import Badge
+
     first_blood = Badge.query.filter_by(key="first_blood").first()
     assert first_blood is not None, "first_blood badge must exist in the catalog"
     winner_earned = PersonBadge.query.filter_by(
@@ -110,8 +111,11 @@ def test_finalize_succeeds_even_if_badge_evaluation_raises(admin_client, app, db
     assert resp.status_code in (200, 302)
 
     from app.models import GameNight as GN
+
     updated = GN.query.get(gn_id)
-    assert updated.final is True, "Game night must be marked final even when badge evaluation raises"
+    assert updated.final is True, (
+        "Game night must be marked final even when badge evaluation raises"
+    )
 
     Player.query.filter_by(id=pl_id).delete()
     GameNight.query.filter_by(id=gn_id).delete()
@@ -124,11 +128,13 @@ def test_toggle_invalid_field_is_rejected(admin_client, app, db):
     """toggle_game_night_field must reject fields not in the allowlist."""
     import datetime
     import uuid
+
     from app.extensions import db as _db
     from app.models import GameNight, Person, Player
 
-    person = Person(first_name="T", last_name="T",
-                    email=f"toggle_{uuid.uuid4().hex[:6]}@test.invalid")
+    person = Person(
+        first_name="T", last_name="T", email=f"toggle_{uuid.uuid4().hex[:6]}@test.invalid"
+    )
     _db.session.add(person)
     _db.session.flush()
     gn = GameNight(date=datetime.date.today(), final=False)
@@ -144,6 +150,7 @@ def test_toggle_invalid_field_is_rejected(admin_client, app, db):
 
     # Confirm id was not modified
     from app.models import GameNight as GN
+
     fresh = GN.query.get(gn_id)
     assert fresh.id == gn_id
 

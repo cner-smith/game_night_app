@@ -7,7 +7,6 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import func
 
 from app.models import (
-    Badge,
     Game,
     GameNight,
     GameNightGame,
@@ -183,6 +182,7 @@ def toggle_game_night_field(game_night_id, field):
     if field == "final" and getattr(game_night, field) is False:
         # Clear night-triggered badges so re-finalization starts clean
         from app.models import PersonBadge
+
         PersonBadge.query.filter_by(game_night_id=game_night_id).delete()
 
     db.session.commit()
@@ -190,11 +190,10 @@ def toggle_game_night_field(game_night_id, field):
     if field == "final" and getattr(game_night, field) is True:
         try:
             from app.services.badge_services import evaluate_badges_for_night
+
             evaluate_badges_for_night(game_night_id)
         except Exception:
-            logger.exception(
-                "Badge evaluation failed for game night %s", game_night_id
-            )
+            logger.exception("Badge evaluation failed for game night %s", game_night_id)
 
     return (
         True,
@@ -413,8 +412,7 @@ def get_recap_details(game_night_id):
         ]
 
     raw_badges = (
-        PersonBadge.query
-        .filter_by(game_night_id=game_night_id)
+        PersonBadge.query.filter_by(game_night_id=game_night_id)
         .options(
             joinedload(PersonBadge.person),
             joinedload(PersonBadge.badge),

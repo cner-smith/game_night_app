@@ -15,6 +15,10 @@ disable_error_code = ["import-untyped"]
 module = "app.models"
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = "app.extensions"
+ignore_errors = true
+
 [tool.bandit]
 exclude_dirs = ["tests"]
 

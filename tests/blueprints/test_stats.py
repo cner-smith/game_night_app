@@ -1,8 +1,9 @@
 def test_user_stats_page_renders_earned_badges(auth_client, app, db):
     """user_stats page must render actual badge data for the current user."""
     import uuid
+
     from app.extensions import db as _db
-    from app.models import Badge, PersonBadge, Person
+    from app.models import Badge, Person, PersonBadge
 
     user = Person.query.filter_by(email="test@example.com").first()
     assert user is not None, "Test user not found — check conftest for auth user email"

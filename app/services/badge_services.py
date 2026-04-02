@@ -13,7 +13,6 @@ from sqlalchemy.orm import joinedload
 from app.extensions import db
 from app.models import (
     Badge,
-    Game,
     GameNight,
     GameNightGame,
     GameNominations,
@@ -34,6 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Checker stubs — each returns bool
 # ---------------------------------------------------------------------------
+
 
 def _check_first_blood(person_id: int, game_night_id: int) -> bool:
     return (
@@ -64,6 +64,7 @@ def _check_hat_trick(person_id: int, game_night_id: int) -> bool:
     )
     return (wins or 0) >= 3
 
+
 def _check_veteran(person_id: int, game_night_id: int) -> bool:
     count = (
         db.session.query(func.count(Player.id))
@@ -72,6 +73,7 @@ def _check_veteran(person_id: int, game_night_id: int) -> bool:
         .scalar()
     )
     return (count or 0) >= 25
+
 
 def _check_kingslayer(person_id: int, game_night_id: int) -> bool:
     top = (
@@ -113,8 +115,10 @@ def _check_kingslayer(person_id: int, game_night_id: int) -> bool:
             return True
     return False
 
+
 def _check_collector(person_id: int, game_night_id: int) -> bool:
     return db.session.query(OwnedBy).filter_by(person_id=person_id).count() >= 10
+
 
 def _check_variety_pack(person_id: int, game_night_id: int) -> bool:
     count = (
@@ -126,6 +130,7 @@ def _check_variety_pack(person_id: int, game_night_id: int) -> bool:
         .scalar()
     )
     return (count or 0) >= 10
+
 
 def _check_nemesis(person_id: int, game_night_id: int) -> bool:
     person_alias = db.aliased(Player)
@@ -151,6 +156,7 @@ def _check_nemesis(person_id: int, game_night_id: int) -> bool:
         .first()
     )
     return row is not None
+
 
 def _check_redemption_arc(person_id: int, game_night_id: int) -> bool:
     won_tonight = (
@@ -183,6 +189,7 @@ def _check_redemption_arc(person_id: int, game_night_id: int) -> bool:
             return True
     return False
 
+
 def _check_night_owl(person_id: int, game_night_id: int) -> bool:
     current = db.session.get(GameNight, game_night_id)
     if not current:
@@ -200,6 +207,7 @@ def _check_night_owl(person_id: int, game_night_id: int) -> bool:
         .scalar()
     )
     return (count or 0) >= 5
+
 
 def _check_gracious_host(person_id: int, game_night_id: int) -> bool:
     current = db.session.get(GameNight, game_night_id)
@@ -229,6 +237,7 @@ def _check_gracious_host(person_id: int, game_night_id: int) -> bool:
     )
     return attended_in_year == active_nights_in_year
 
+
 def _check_jack_of_all_trades(person_id: int, game_night_id: int) -> bool:
     person_results = (
         db.session.query(GameNightGame.id.label("gng_id"), Result.position)
@@ -252,6 +261,7 @@ def _check_jack_of_all_trades(person_id: int, game_night_id: int) -> bool:
         if row.position > (total + 1) // 2:
             return False
     return True
+
 
 def _check_upset_special(person_id: int, game_night_id: int) -> bool:
     tonight_gng_ids = [
@@ -322,6 +332,7 @@ def _check_upset_special(person_id: int, game_night_id: int) -> bool:
             return True
     return False
 
+
 def _check_bench_warmer(person_id: int, game_night_id: int) -> bool:
     person_results = (
         db.session.query(GameNightGame.id.label("gng_id"), Result.position)
@@ -346,6 +357,7 @@ def _check_bench_warmer(person_id: int, game_night_id: int) -> bool:
         if max_pos is None or max_pos <= 1 or row.position != max_pos:
             return False
     return True
+
 
 def _check_grudge_match(person_id: int, game_night_id: int) -> bool:
     person_gng_ids = [
@@ -377,6 +389,7 @@ def _check_grudge_match(person_id: int, game_night_id: int) -> bool:
         .first()
     )
     return result is not None
+
 
 def _check_the_closer(person_id: int, game_night_id: int) -> bool:
     attended = (
@@ -428,14 +441,18 @@ def _check_the_closer(person_id: int, game_night_id: int) -> bool:
             streak = 0
     return False
 
+
 def _check_opening_night(person_id: int, game_night_id: int) -> bool:
     first_night = db.session.query(GameNight).order_by(GameNight.date, GameNight.id).first()
     if first_night is None:
         return False
     return (
-        db.session.query(Player).filter_by(game_night_id=first_night.id, people_id=person_id).first()
+        db.session.query(Player)
+        .filter_by(game_night_id=first_night.id, people_id=person_id)
+        .first()
         is not None
     )
+
 
 def _check_winning_streak(person_id: int, game_night_id: int) -> bool:
     attended = (
@@ -475,8 +492,13 @@ def _check_winning_streak(person_id: int, game_night_id: int) -> bool:
             streak = 0
     return False
 
+
 def _check_the_diplomat(person_id: int, game_night_id: int) -> bool:
-    if not db.session.query(Player).filter_by(game_night_id=game_night_id, people_id=person_id).first():
+    if (
+        not db.session.query(Player)
+        .filter_by(game_night_id=game_night_id, people_id=person_id)
+        .first()
+    ):
         return False
     games = db.session.query(GameNightGame).filter_by(game_night_id=game_night_id).all()
     if not games:
@@ -503,6 +525,7 @@ def _check_the_diplomat(person_id: int, game_night_id: int) -> bool:
             return False
     return True
 
+
 def _check_early_bird(person_id: int, game_night_id: int) -> bool:
     # First registered player per finalized night (use Player.id as proxy for insertion order)
     first_player_per_night = (
@@ -523,6 +546,7 @@ def _check_early_bird(person_id: int, game_night_id: int) -> bool:
         .scalar()
     )
     return (first_count or 0) >= 10
+
 
 def _check_the_rematch(person_id: int, game_night_id: int) -> bool:
     prev_player = (
@@ -545,9 +569,12 @@ def _check_the_rematch(person_id: int, game_night_id: int) -> bool:
     }
     prev_game_ids = {
         r.game_id
-        for r in db.session.query(GameNightGame).filter_by(game_night_id=prev_player.game_night_id).all()
+        for r in db.session.query(GameNightGame)
+        .filter_by(game_night_id=prev_player.game_night_id)
+        .all()
     }
     return bool(current_game_ids & prev_game_ids)
+
 
 def _check_century_club(person_id: int, game_night_id: int) -> bool:
     count = (
@@ -559,6 +586,7 @@ def _check_century_club(person_id: int, game_night_id: int) -> bool:
         .scalar()
     )
     return (count or 0) >= 100
+
 
 def _check_dark_horse(person_id: int, game_night_id: int) -> bool:
     results = (
@@ -591,6 +619,7 @@ def _check_dark_horse(person_id: int, game_night_id: int) -> bool:
         if row.position != max_pos:
             return False
     return results[-1].position == 1
+
 
 def _check_social_butterfly(person_id: int, game_night_id: int) -> bool:
     all_people_count = db.session.query(Person).count()
@@ -635,6 +664,7 @@ def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
     )
     return (oracle_nights or 0) >= 5
 
+
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
     first_night = db.session.query(GameNight).order_by(GameNight.date, GameNight.id).first()
     if first_night is None:
@@ -647,6 +677,7 @@ def _check_founding_member(person_id: int, game_night_id: int) -> bool:
         .all()
     )
     return any(pid == person_id for (pid,) in first_five)
+
 
 def _check_most_wins(person_id: int, game_night_id: int) -> bool:
     rows = (
@@ -706,6 +737,7 @@ _BADGE_REGISTRY: dict = {
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def evaluate_badges_for_night(game_night_id: int) -> None:
     """Evaluate all badges for all participants of the given finalized game night.
 
@@ -739,17 +771,21 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
                 except Exception:
                     logger.exception(
                         "Badge checker %s failed for person %s night %s",
-                        badge_key, person_id, game_night_id,
+                        badge_key,
+                        person_id,
+                        game_night_id,
                     )
                     continue
 
                 if earned:
                     try:
-                        db.session.add(PersonBadge(
-                            person_id=person_id,
-                            badge_id=badge.id,
-                            game_night_id=night_id_to_store,
-                        ))
+                        db.session.add(
+                            PersonBadge(
+                                person_id=person_id,
+                                badge_id=badge.id,
+                                game_night_id=night_id_to_store,
+                            )
+                        )
                         db.session.flush()
                     except IntegrityError:
                         db.session.rollback()
