@@ -32,7 +32,7 @@ def upgrade():
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("person_id", sa.Integer(), nullable=False),
         sa.Column("badge_id", sa.Integer(), nullable=False),
-        sa.Column("earned_at", sa.DateTime(), server_default=sa.text("now()"), nullable=False),
+        sa.Column("earned_at", sa.DateTime(), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
         sa.Column("game_night_id", sa.Integer(), nullable=True),
         sa.ForeignKeyConstraint(["badge_id"], ["badges.id"]),
         sa.ForeignKeyConstraint(["game_night_id"], ["gamenights.id"]),
