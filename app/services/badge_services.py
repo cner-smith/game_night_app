@@ -29,13 +29,6 @@ logger = logging.getLogger(__name__)
 # Badge definitions — single source of truth for key → uses_night_id mapping
 # ---------------------------------------------------------------------------
 
-# keys where game_night_id is recorded on PersonBadge (the night that triggered it)
-_NIGHT_LINKED = {
-    "first_blood", "hat_trick", "kingslayer", "redemption_arc",
-    "jack_of_all_trades", "upset_special", "bench_warmer", "opening_night",
-    "the_diplomat", "the_rematch", "dark_horse",
-}
-
 
 # ---------------------------------------------------------------------------
 # Checker stubs — each returns bool
@@ -691,10 +684,14 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
     """Evaluate all badges for all participants of the given finalized game night.
 
     Silently logs and returns on any error — must never raise to the caller.
+    Relies on the uq_person_badge unique constraint to prevent duplicates;
+    does NOT use an application-level pre-check (which would be a race condition).
     """
+    from sqlalchemy.exc import IntegrityError
+
     try:
         game_night = db.session.get(GameNight, game_night_id)
-        if game_night is None:
+        if game_night is None or not game_night.final:
             return
 
         participants = Player.query.filter_by(game_night_id=game_night_id).all()
@@ -707,15 +704,10 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
             if badge is None:
                 continue
 
-            night_id_to_store = game_night_id if badge_key in _NIGHT_LINKED else None
+            # Always store the triggering night so recap can show all awarded badges
+            night_id_to_store = game_night_id
 
             for person_id in person_ids:
-                already = PersonBadge.query.filter_by(
-                    person_id=person_id, badge_id=badge.id
-                ).first()
-                if already:
-                    continue
-
                 try:
                     earned = checker_fn(person_id, game_night_id)
                 except Exception:
@@ -726,11 +718,17 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
                     continue
 
                 if earned:
-                    db.session.add(PersonBadge(
-                        person_id=person_id,
-                        badge_id=badge.id,
-                        game_night_id=night_id_to_store,
-                    ))
+                    try:
+                        db.session.add(PersonBadge(
+                            person_id=person_id,
+                            badge_id=badge.id,
+                            game_night_id=night_id_to_store,
+                        ))
+                        db.session.flush()
+                    except IntegrityError:
+                        db.session.rollback()
+                        # Already earned — unique constraint fired, skip silently
+                        continue
 
         db.session.commit()
 

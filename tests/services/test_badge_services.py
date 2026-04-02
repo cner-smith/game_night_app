@@ -137,6 +137,33 @@ def test_evaluate_badges_does_not_raise_on_bad_night(app, db):
         evaluate_badges_for_night(999999)
 
 
+def test_evaluate_badges_skips_unfinalized_night(app, db, badge_night):
+    """evaluate_badges_for_night must do nothing on an unfinalized night."""
+    from app.services.badge_services import evaluate_badges_for_night
+
+    with app.app_context():
+        gn_id = badge_night["game_night"].id
+        winner_id = badge_night["winner"].id
+
+        # Un-finalize the night
+        from app.models import GameNight as GN
+        gn = GN.query.get(gn_id)
+        gn.final = False
+        _db.session.commit()
+
+        PersonBadge.query.filter_by(person_id=winner_id).delete()
+        _db.session.commit()
+
+        evaluate_badges_for_night(gn_id)
+
+        count = PersonBadge.query.filter_by(person_id=winner_id).count()
+        assert count == 0, "No badges should be awarded for an unfinalized night"
+
+        # Restore for fixture teardown
+        gn.final = True
+        _db.session.commit()
+
+
 # ---------------------------------------------------------------------------
 # Group A: single-night wins/placements
 # ---------------------------------------------------------------------------
