@@ -74,13 +74,13 @@ def _check_veteran(person_id: int, game_night_id: int) -> bool:
 
 def _check_kingslayer(person_id: int, game_night_id: int) -> bool:
     top = (
-        db.session.query(Player.people_id, func.count(Result.id).label("wins"))
+        db.session.query(Player.people_id, func.count(Result.id))
         .join(Result, Player.id == Result.player_id)
         .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
         .join(GameNight, GameNightGame.game_night_id == GameNight.id)
         .filter(Result.position == 1, GameNight.final.is_(True))
         .group_by(Player.people_id)
-        .order_by(db.text("wins DESC"))
+        .order_by(func.count(Result.id).desc())
         .first()
     )
     if not top or top.people_id == person_id:
@@ -651,7 +651,7 @@ def _check_most_wins(person_id: int, game_night_id: int) -> bool:
         .join(GameNight, GameNightGame.game_night_id == GameNight.id)
         .filter(Result.position == 1, GameNight.final.is_(True))
         .group_by(Player.people_id)
-        .order_by(db.text("wins DESC"))
+        .order_by(func.count(Result.id).desc())
         .all()
     )
     if not rows:
@@ -661,11 +661,6 @@ def _check_most_wins(person_id: int, game_night_id: int) -> bool:
         return False
     person_wins = next((r.wins for r in rows if r.people_id == person_id), 0)
     return person_wins == max_wins
-
-
-def _stub(person_id: int, game_night_id: int) -> bool:
-    """Placeholder — returns False until implemented."""
-    return False
 
 
 # ---------------------------------------------------------------------------
