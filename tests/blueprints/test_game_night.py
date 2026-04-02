@@ -47,10 +47,14 @@ def test_finalize_route_triggers_badge_evaluation(admin_client, app, db):
     resp = admin_client.post(f"/game_night/{gn_id}/toggle/final")
     assert resp.status_code in (200, 302)
 
-    badge_count = PersonBadge.query.filter(
-        PersonBadge.person_id.in_([person_id, other_id])
-    ).count()
-    assert badge_count >= 1
+    from app.models import Badge
+    first_blood = Badge.query.filter_by(key="first_blood").first()
+    assert first_blood is not None, "first_blood badge must exist in the catalog"
+    winner_earned = PersonBadge.query.filter_by(
+        person_id=person_id, badge_id=first_blood.id
+    ).first()
+    assert winner_earned is not None, "winner should have earned first_blood"
+    assert winner_earned.game_night_id == gn_id, "badge should be linked to the finalized night"
 
     PersonBadge.query.filter(PersonBadge.person_id.in_([person_id, other_id])).delete()
     Result.query.filter_by(game_night_game_id=gng_id).delete()
@@ -104,6 +108,10 @@ def test_finalize_succeeds_even_if_badge_evaluation_raises(admin_client, app, db
 
     resp = admin_client.post(f"/game_night/{gn_id}/toggle/final")
     assert resp.status_code in (200, 302)
+
+    from app.models import GameNight as GN
+    updated = GN.query.get(gn_id)
+    assert updated.final is True, "Game night must be marked final even when badge evaluation raises"
 
     Player.query.filter_by(id=pl_id).delete()
     GameNight.query.filter_by(id=gn_id).delete()

@@ -205,16 +205,20 @@ def _check_gracious_host(person_id: int, game_night_id: int) -> bool:
     if not current:
         return False
     year = current.date.year
-    total_in_year = (
-        db.session.query(func.count(GameNight.id))
+    # Count only finalized nights that had at least one player (active nights).
+    # This avoids phantom finalized nights with no participants skewing the
+    # denominator and causing false negatives in perfect-attendance checks.
+    active_nights_in_year = (
+        db.session.query(func.count(func.distinct(GameNight.id)))
+        .join(Player, Player.game_night_id == GameNight.id)
         .filter(GameNight.final.is_(True), func.extract("year", GameNight.date) == year)
         .scalar()
     )
-    if not total_in_year:
+    if not active_nights_in_year:
         return False
     attended_in_year = (
-        db.session.query(func.count(Player.id))
-        .join(GameNight, Player.game_night_id == GameNight.id)
+        db.session.query(func.count(func.distinct(GameNight.id)))
+        .join(Player, Player.game_night_id == GameNight.id)
         .filter(
             Player.people_id == person_id,
             GameNight.final.is_(True),
@@ -222,7 +226,7 @@ def _check_gracious_host(person_id: int, game_night_id: int) -> bool:
         )
         .scalar()
     )
-    return attended_in_year == total_in_year
+    return attended_in_year == active_nights_in_year
 
 def _check_jack_of_all_trades(person_id: int, game_night_id: int) -> bool:
     person_results = (
