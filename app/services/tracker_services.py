@@ -1,5 +1,5 @@
 from app.extensions import db
-from app.models import (
+from app.models import (  # noqa: F401 — partial imports used by later functions in this module
     Player,
     Result,
     TrackerField,
