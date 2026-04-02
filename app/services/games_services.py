@@ -6,6 +6,7 @@ from app.models import (
     Game,
     GameNight,
     GameNightGame,
+    GameNominations,
     GameRatings,
     GamesIndex,
     OwnedBy,
@@ -245,6 +246,42 @@ def get_game_details(game_id, user_id):
 def get_wishlist(user_id):
     """Displays the user's wishlist."""
     return Game.query.join(Wishlist).filter(Wishlist.person_id == user_id).order_by(Game.name).all()
+
+
+def get_play_stats():
+    """Returns play counts and last-played dates per game, counting only finalized nights."""
+    rows = (
+        db.session.query(
+            GameNightGame.game_id,
+            func.count(GameNightGame.id).label("play_count"),
+            func.max(GameNight.date).label("last_played"),
+        )
+        .join(GameNight, GameNightGame.game_night_id == GameNight.id)
+        .filter(GameNight.final.is_(True))
+        .group_by(GameNightGame.game_id)
+        .all()
+    )
+    return {
+        row.game_id: {"play_count": row.play_count, "last_played": row.last_played} for row in rows
+    }
+
+
+def get_bridesmaid_games():
+    """Returns games nominated but never played, annotated with nomination_count."""
+    played_ids = db.session.query(distinct(GameNightGame.game_id)).scalar_subquery()
+    rows = (
+        db.session.query(Game, func.count(GameNominations.id).label("nomination_count"))
+        .join(GameNominations, Game.id == GameNominations.game_id)
+        .filter(~Game.id.in_(played_ids))
+        .group_by(Game.id)
+        .order_by(func.count(GameNominations.id).desc())
+        .all()
+    )
+    result = []
+    for game, count in rows:
+        game.nomination_count = count
+        result.append(game)
+    return result
 
 
 def get_group_wishlist(user_id):

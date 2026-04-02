@@ -112,8 +112,26 @@
 
   </div>
 
-  <!-- Right column: Leaderboard -->
+  <!-- Right column: Play History + Leaderboard -->
   <div class="space-y-6">
+
+    <!-- Play History -->
+    <div class="bg-white rounded-xl border border-stone-200 shadow-sm p-5">
+      <h2 class="text-base font-semibold text-stone-800 mb-3">Play History</h2>
+      {% if game_stat %}
+        <div class="space-y-1 text-sm text-stone-600">
+          <p><span class="font-medium text-stone-700">Times Played:</span> {{ game_stat.play_count }}</p>
+          <p><span class="font-medium text-stone-700">Last Played:</span> {{ game_stat.last_played.strftime('%B %-d, %Y') }}</p>
+        </div>
+        {% set days_ago = (today - game_stat.last_played).days %}
+        {% if days_ago <= 30 %}
+          <span class="inline-block mt-3 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Recently Played</span>
+        {% endif %}
+      {% else %}
+        <p class="text-sm text-stone-400">This game has never been played at a game night.</p>
+      {% endif %}
+    </div>
+
     <div class="bg-white rounded-xl border border-stone-200 shadow-sm p-5">
       <h2 class="text-base font-semibold text-stone-800 mb-3">Leaderboard (Top 3 Players)</h2>
       <table class="w-full text-sm">

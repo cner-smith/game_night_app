@@ -14,7 +14,7 @@ from app.utils import admin_required
 games_bp = Blueprint("games", __name__)
 
 
-@games_bp.route("/games", methods=["GET"])
+@games_bp.route("/games", methods=["GET"], strict_slashes=False)
 @login_required
 def games_index():
     name_filter = request.args.get("name", "").strip()
@@ -31,8 +31,15 @@ def games_index():
     games_with_ownership = games_services.get_filtered_games(
         current_user.id, name_filter, players_filter, playtime_filter, min_rating_filter
     )
+    play_stats = games_services.get_play_stats()
+    bridesmaid_games = games_services.get_bridesmaid_games()
 
-    context = {"games": games_with_ownership}
+    context = {
+        "games": games_with_ownership,
+        "play_stats": play_stats,
+        "bridesmaid_games": bridesmaid_games,
+        "today": date.today(),
+    }
     return render_template("games_index.html", **context)
 
 
@@ -58,12 +65,16 @@ def view_game(game_id):
     game, leaderboard, game_nights, user_rating = games_services.get_game_details(
         game_id, current_user.id
     )
+    play_stats = games_services.get_play_stats()
+    game_stat = play_stats.get(game_id)
 
     context = {
         "game": game,
         "leaderboard": leaderboard,
         "game_nights": game_nights,
         "user_rating": user_rating,
+        "game_stat": game_stat,
+        "today": date.today(),
     }
     return render_template("view_game.html", **context)
 
