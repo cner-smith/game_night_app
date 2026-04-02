@@ -3,7 +3,13 @@
 from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.models import GameNightGame, Player, TrackerField, TrackerSession, TrackerValue  # noqa: F401
+from app.models import (  # noqa: F401
+    GameNightGame,
+    Player,
+    TrackerField,
+    TrackerSession,
+    TrackerValue,
+)
 from app.services import tracker_services
 
 tracker_bp = Blueprint("tracker", __name__)
@@ -48,7 +54,7 @@ def setup_tracker(gng_id):
 @tracker_bp.route("/game_night/<int:gng_id>/tracker", methods=["POST"])
 @login_required
 def launch_tracker(gng_id):
-    gng = GameNightGame.query.get_or_404(gng_id)
+    GameNightGame.query.get_or_404(gng_id)
     session_id = int(request.form["session_id"])
     mode = request.form.get("mode", "individual")
     player_ids = [int(pid) for pid in request.form.getlist("player_ids")]

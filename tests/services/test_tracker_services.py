@@ -1,16 +1,27 @@
+import datetime
+import uuid
+
+import pytest
+
+from app.extensions import db as _db
+from app.models import (
+    Game,
+    GameNight,
+    GameNightGame,
+    Person,
+    Player,
+    TrackerField,
+    TrackerSession,
+    TrackerValue,
+)
+
+
 def test_tracker_models_importable():
-    from app.models import TrackerSession, TrackerField, TrackerTeam, TrackerValue
+    from app.models import TrackerField, TrackerSession, TrackerTeam, TrackerValue
     assert TrackerSession.__tablename__ == "tracker_sessions"
     assert TrackerField.__tablename__ == "tracker_fields"
     assert TrackerTeam.__tablename__ == "tracker_teams"
     assert TrackerValue.__tablename__ == "tracker_values"
-
-
-import pytest
-from app.extensions import db as _db
-from app.models import Game, GameNight, GameNightGame, Person, Player, TrackerSession, TrackerField, TrackerValue
-import datetime
-import uuid
 
 
 @pytest.fixture()
@@ -53,7 +64,11 @@ def tracker_night(app, db):
 @pytest.fixture()
 def active_session(app, db, tracker_night):
     """A launched tracker session with VP counter (score) and a checkbox."""
-    from app.services.tracker_services import get_or_create_configuring_session, add_field, launch_session
+    from app.services.tracker_services import (
+        add_field,
+        get_or_create_configuring_session,
+        launch_session,
+    )
     session = get_or_create_configuring_session(tracker_night["gng_id"])
     add_field(session.id, type="counter", label="VP", starting_value=0, is_score_field=True)
     add_field(session.id, type="checkbox", label="Crown", starting_value=0, is_score_field=False)
@@ -115,7 +130,7 @@ def test_get_or_create_configuring_session_returns_existing(app, db, tracker_nig
 
 
 def test_discard_session_removes_session(app, db, tracker_night):
-    from app.services.tracker_services import get_or_create_configuring_session, discard_session
+    from app.services.tracker_services import discard_session, get_or_create_configuring_session
     session = get_or_create_configuring_session(tracker_night["gng_id"])
     sid = session.id
     discard_session(sid)
@@ -123,7 +138,7 @@ def test_discard_session_removes_session(app, db, tracker_night):
 
 
 def test_add_field_creates_tracker_field(app, db, tracker_night):
-    from app.services.tracker_services import get_or_create_configuring_session, add_field
+    from app.services.tracker_services import add_field, get_or_create_configuring_session
     session = get_or_create_configuring_session(tracker_night["gng_id"])
     field = add_field(session.id, type="counter", label="Victory Points", starting_value=0, is_score_field=True)
     assert field.label == "Victory Points"
@@ -133,7 +148,11 @@ def test_add_field_creates_tracker_field(app, db, tracker_night):
 
 
 def test_launch_session_seeds_values_for_individual(app, db, tracker_night):
-    from app.services.tracker_services import get_or_create_configuring_session, add_field, launch_session
+    from app.services.tracker_services import (
+        add_field,
+        get_or_create_configuring_session,
+        launch_session,
+    )
     session = get_or_create_configuring_session(tracker_night["gng_id"])
     add_field(session.id, type="counter", label="VP", starting_value=5, is_score_field=True)
     add_field(session.id, type="checkbox", label="Has Crown", starting_value=0, is_score_field=False)
@@ -165,7 +184,7 @@ def test_launch_session_seeds_values_for_individual(app, db, tracker_night):
 
 
 def test_compute_rankings_sorts_descending(app, db, active_session):
-    from app.services.tracker_services import update_value, compute_rankings
+    from app.services.tracker_services import compute_rankings, update_value
     sid = active_session["session_id"]
     field = TrackerField.query.filter_by(tracker_session_id=sid, label="VP").first()
     update_value(sid, field.id, entity_type="player", entity_id=active_session["pl1_id"], delta=10)
@@ -180,7 +199,7 @@ def test_compute_rankings_sorts_descending(app, db, active_session):
 
 
 def test_compute_rankings_ties_share_position(app, db, active_session):
-    from app.services.tracker_services import update_value, compute_rankings
+    from app.services.tracker_services import compute_rankings, update_value
     sid = active_session["session_id"]
     field = TrackerField.query.filter_by(tracker_session_id=sid, label="VP").first()
     update_value(sid, field.id, entity_type="player", entity_id=active_session["pl1_id"], delta=5)
@@ -191,8 +210,8 @@ def test_compute_rankings_ties_share_position(app, db, active_session):
 
 
 def test_save_results_creates_result_rows(app, db, active_session):
-    from app.services.tracker_services import update_value, compute_rankings, save_results
     from app.models import Result
+    from app.services.tracker_services import compute_rankings, save_results, update_value
     sid = active_session["session_id"]
     field = TrackerField.query.filter_by(tracker_session_id=sid, label="VP").first()
     gng_id = active_session["gng_id"]
@@ -210,9 +229,9 @@ def test_save_results_creates_result_rows(app, db, active_session):
 
 
 def test_save_results_upserts_existing_rows(app, db, active_session):
-    from app.services.tracker_services import update_value, compute_rankings, save_results
-    from app.models import Result
     from app.extensions import db as _db
+    from app.models import Result
+    from app.services.tracker_services import compute_rankings, save_results, update_value
     sid = active_session["session_id"]
     field = TrackerField.query.filter_by(tracker_session_id=sid, label="VP").first()
     gng_id = active_session["gng_id"]
