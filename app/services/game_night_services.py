@@ -1,6 +1,8 @@
+import logging
 from collections import defaultdict
 from datetime import datetime
 
+from flask import abort
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import func
 
@@ -15,12 +17,15 @@ from app.models import (
     GameRatings,
     GameVotes,
     OwnedBy,
+    PersonBadge,
     Player,
     Result,
     Wishlist,
     db,
 )
 from app.services.admin_services import get_all_people
+
+logger = logging.getLogger(__name__)
 
 
 def parse_date(date_str):
@@ -163,19 +168,37 @@ def get_log_results_data(game_night_game_id):
     return game_night_game, players, existing_results
 
 
+_TOGGLEABLE_FIELDS = {"final", "closed"}
+
+
 def toggle_game_night_field(game_night_id, field):
     """Toggle boolean fields in a game night (e.g., final results, voting)."""
+    if field not in _TOGGLEABLE_FIELDS:
+        return False, "Invalid field."
+
     game_night = GameNight.query.get_or_404(game_night_id)
+    setattr(game_night, field, not getattr(game_night, field))
 
-    if hasattr(game_night, field):
-        setattr(game_night, field, not getattr(game_night, field))
-        db.session.commit()
-        return (
-            True,
-            f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}.",
-        )
+    if field == "final" and getattr(game_night, field) is False:
+        # Clear night-triggered badges so re-finalization starts clean
+        from app.models import PersonBadge
 
-    return False, "Invalid field."
+        PersonBadge.query.filter_by(game_night_id=game_night_id).delete()
+
+    db.session.commit()
+
+    if field == "final" and getattr(game_night, field) is True:
+        try:
+            from app.services.badge_services import evaluate_badges_for_night
+
+            evaluate_badges_for_night(game_night_id)
+        except Exception:
+            logger.exception("Badge evaluation failed for game night %s", game_night_id)
+
+    return (
+        True,
+        f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}.",
+    )
 
 
 def determine_top_places(game_night_id):
@@ -362,3 +385,53 @@ def get_filtered_games_for_game_night(
         }
 
     return [{"game": game, "in_wishlist": game.id in wishlist_game_ids} for game in games]
+
+
+def get_recap_details(game_night_id):
+    """Fetch data for the public game night recap page."""
+    game_night = GameNight.query.get_or_404(game_night_id)
+
+    if not game_night.final:
+        abort(404)
+
+    players = sorted(
+        Player.query.filter_by(game_night_id=game_night.id)
+        .options(joinedload(Player.person))
+        .all(),
+        key=lambda p: (p.person.last_name, p.person.first_name),
+    )
+
+    game_night_games = GameNightGameResults.query.filter_by(game_night_id=game_night_id).all()
+
+    top_places = None
+    if game_night_games:
+        top_places = [
+            (rank, player_ids)
+            for rank, player_ids in determine_top_places(game_night_id)
+            if rank in {1, 2, 3}
+        ]
+
+    raw_badges = (
+        PersonBadge.query.filter_by(game_night_id=game_night_id)
+        .options(
+            joinedload(PersonBadge.person),
+            joinedload(PersonBadge.badge),
+        )
+        .all()
+    )
+    badges_earned = [
+        {
+            "person_name": f"{pb.person.first_name} {pb.person.last_name}",
+            "badge_name": pb.badge.name,
+            "badge_icon": pb.badge.icon,
+        }
+        for pb in raw_badges
+    ]
+
+    return {
+        "game_night": game_night,
+        "players": players,
+        "game_night_games": game_night_games,
+        "top_places": top_places,
+        "badges_earned": badges_earned,
+    }

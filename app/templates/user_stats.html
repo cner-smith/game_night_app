@@ -4,6 +4,23 @@
 
 <h1 class="text-2xl font-bold text-stone-800 mb-6">Player Statistics</h1>
 
+<div class="mb-8">
+  <h2 class="text-xl font-semibold text-gray-800 mb-4">Badges</h2>
+  {% if badges %}
+  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+    {% for pb in badges %}
+    <div class="bg-white rounded-lg shadow p-4 flex flex-col items-center text-center">
+      <span class="text-3xl mb-2">{{ pb.badge.icon }}</span>
+      <span class="font-semibold text-gray-800 text-sm">{{ pb.badge.name }}</span>
+      <span class="text-xs text-gray-500 mt-1">{{ pb.earned_at.strftime('%b %d, %Y') }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="text-sm text-gray-500">No badges earned yet. Keep playing!</p>
+  {% endif %}
+</div>
+
 <form method="get" class="bg-white rounded-xl border border-stone-200 shadow-sm p-5 mb-6" id="userStatsForm">
   <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
 
