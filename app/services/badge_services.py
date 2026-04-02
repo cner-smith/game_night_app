@@ -413,11 +413,11 @@ def _check_the_closer(person_id: int, game_night_id: int) -> bool:
     return False
 
 def _check_opening_night(person_id: int, game_night_id: int) -> bool:
-    first_night = GameNight.query.order_by(GameNight.id).first()
-    if first_night is None or first_night.id != game_night_id:
+    first_night = GameNight.query.order_by(GameNight.date, GameNight.id).first()
+    if first_night is None:
         return False
     return (
-        Player.query.filter_by(game_night_id=game_night_id, people_id=person_id).first()
+        Player.query.filter_by(game_night_id=first_night.id, people_id=person_id).first()
         is not None
     )
 
@@ -611,20 +611,17 @@ def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
     return oracle_count >= 5
 
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
+    first_night = GameNight.query.order_by(GameNight.date, GameNight.id).first()
+    if first_night is None:
+        return False
     first_five = (
         db.session.query(Player.people_id)
-        .join(GameNight, Player.game_night_id == GameNight.id)
-        .group_by(Player.people_id)
-        .order_by(func.min(GameNight.date))
+        .filter_by(game_night_id=first_night.id)
+        .order_by(Player.id)
         .limit(5)
-        .subquery()
+        .all()
     )
-    return (
-        db.session.query(first_five)
-        .filter(first_five.c.people_id == person_id)
-        .first()
-        is not None
-    )
+    return any(pid == person_id for (pid,) in first_five)
 
 def _check_most_wins(person_id: int, game_night_id: int) -> bool:
     rows = (

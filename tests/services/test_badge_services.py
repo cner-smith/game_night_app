@@ -390,22 +390,48 @@ def test_the_diplomat_does_not_earn_with_no_results_recorded(app, db):
         _db.session.commit()
 
 
-def test_opening_night_earns_on_first_night(app, db, badge_night):
+def test_opening_night_earns_for_attendee_of_first_night(app, db):
+    """opening_night earns for anyone who attended the earliest recorded game night."""
     from app.services.badge_services import _check_opening_night
+
     with app.app_context():
-        # Find the actual first game night in the DB
-        from app.models import GameNight as GN
-        first = GN.query.order_by(GN.id).first()
-        assert first is not None
-        # If badge_night is the first, it earns; otherwise test opening_night with the first night
-        person_id = badge_night["winner"].id
-        gn_id = badge_night["game_night"].id
-        # Only earns when game_night_id IS the first night
-        result = _check_opening_night(person_id, gn_id)
-        if first.id == gn_id:
-            assert result is True
-        else:
-            assert result is False
+        # Use a date far in the past to guarantee this is the first night in the DB
+        first_date = datetime.date(1900, 1, 1)
+        later_date = datetime.date(1900, 1, 2)
+
+        game = Game(name=f"OGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        founder = Person(first_name="Founder", last_name="One",
+                         email=f"founder_{uuid.uuid4().hex[:6]}@test.invalid")
+        latecomer = Person(first_name="Late", last_name="Comer",
+                           email=f"late_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, founder, latecomer])
+        _db.session.flush()
+
+        first_gn = GameNight(date=first_date, final=True)
+        later_gn = GameNight(date=later_date, final=True)
+        _db.session.add_all([first_gn, later_gn])
+        _db.session.flush()
+
+        founder_player = Player(game_night_id=first_gn.id, people_id=founder.id)
+        latecomer_player = Player(game_night_id=later_gn.id, people_id=latecomer.id)
+        _db.session.add_all([founder_player, latecomer_player])
+        _db.session.commit()
+
+        # Founder attended the first night — earns badge regardless of which night we evaluate
+        assert _check_opening_night(founder.id, later_gn.id) is True
+        # Latecomer only attended a later night — does not earn
+        assert _check_opening_night(latecomer.id, later_gn.id) is False
+
+        _db.session.delete(founder_player)
+        _db.session.delete(latecomer_player)
+        PersonBadge.query.filter_by(game_night_id=first_gn.id).delete()
+        PersonBadge.query.filter_by(game_night_id=later_gn.id).delete()
+        _db.session.delete(first_gn)
+        _db.session.delete(later_gn)
+        _db.session.delete(founder)
+        _db.session.delete(latecomer)
+        _db.session.delete(game)
+        _db.session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -767,13 +793,52 @@ def test_collector_earns_with_10_owned_games(app, db):
         _db.session.commit()
 
 
-def test_founding_member_earns_for_early_players(app, db, multi_night_person):
+def test_founding_member_earns_for_attendees_of_first_night(app, db):
+    """founding_member earns for the first 5 attendees of the earliest game night."""
     from app.services.badge_services import _check_founding_member
+
     with app.app_context():
-        assert _check_founding_member(
-            multi_night_person["person"].id,
-            multi_night_person["last_night"].id
-        ) is True
+        first_date = datetime.date(1901, 1, 1)
+        later_date = datetime.date(1901, 1, 2)
+
+        founders = [
+            Person(first_name=f"F{i}", last_name="Founder",
+                   email=f"founding_{i}_{uuid.uuid4().hex[:6]}@test.invalid")
+            for i in range(3)
+        ]
+        outsider = Person(first_name="Out", last_name="Sider",
+                          email=f"outsider_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all(founders + [outsider])
+        _db.session.flush()
+
+        first_gn = GameNight(date=first_date, final=True)
+        later_gn = GameNight(date=later_date, final=True)
+        _db.session.add_all([first_gn, later_gn])
+        _db.session.flush()
+
+        founder_players = [
+            Player(game_night_id=first_gn.id, people_id=f.id) for f in founders
+        ]
+        outsider_player = Player(game_night_id=later_gn.id, people_id=outsider.id)
+        _db.session.add_all(founder_players + [outsider_player])
+        _db.session.commit()
+
+        for f in founders:
+            assert _check_founding_member(f.id, later_gn.id) is True
+        assert _check_founding_member(outsider.id, later_gn.id) is False
+
+        for p in founder_players:
+            _db.session.delete(p)
+        _db.session.delete(outsider_player)
+        for f in founders:
+            PersonBadge.query.filter_by(person_id=f.id).delete()
+        PersonBadge.query.filter_by(person_id=outsider.id).delete()
+        _db.session.delete(first_gn)
+        _db.session.delete(later_gn)
+        for f in founders:
+            _db.session.delete(f)
+        _db.session.delete(outsider)
+        _db.session.commit()
 
 # ---------------------------------------------------------------------------
 # Group D: consecutive streaks
