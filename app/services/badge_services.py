@@ -460,6 +460,14 @@ def _check_the_diplomat(person_id: int, game_night_id: int) -> bool:
     if not games:
         return False
     for gng in games:
+        # Must have at least one result recorded — a game with no results doesn't qualify
+        has_results = (
+            db.session.query(Result)
+            .filter(Result.game_night_game_id == gng.id, Result.position.isnot(None))
+            .first()
+        )
+        if not has_results:
+            return False
         non_first = (
             db.session.query(Result)
             .filter(

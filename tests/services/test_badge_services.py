@@ -355,6 +355,41 @@ def test_the_diplomat_does_not_earn_when_not_all_tied(app, db, badge_night):
         assert _check_the_diplomat(badge_night["winner"].id, badge_night["game_night"].id) is False
 
 
+def test_the_diplomat_does_not_earn_with_no_results_recorded(app, db):
+    """the_diplomat must not award badge when games have no results at all."""
+    from app.services.badge_services import _check_the_diplomat
+
+    with app.app_context():
+        game = Game(name=f"EmptyGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Dip", last_name="Empty",
+                        email=f"dipempty_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person])
+        _db.session.flush()
+
+        gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=3), final=True)
+        _db.session.add(gn)
+        _db.session.flush()
+
+        player = Player(game_night_id=gn.id, people_id=person.id)
+        _db.session.add(player)
+        _db.session.flush()
+
+        # Game with NO results
+        gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+        _db.session.add(gng)
+        _db.session.commit()
+
+        assert _check_the_diplomat(person.id, gn.id) is False
+
+        _db.session.delete(gng)
+        _db.session.delete(player)
+        PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+        _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
 def test_opening_night_earns_on_first_night(app, db, badge_night):
     from app.services.badge_services import _check_opening_night
     with app.app_context():
