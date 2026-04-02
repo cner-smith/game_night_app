@@ -82,6 +82,7 @@ def badge_night(app, db):
             "gng": gng,
         }
 
+        _db.session.rollback()
         Result.query.filter_by(game_night_game_id=gng.id).delete()
         _db.session.delete(gng)
         _db.session.delete(winner_player)
@@ -219,6 +220,7 @@ def hat_trick_night(app, db):
         _db.session.commit()
         yield {"gn": gn, "player": player_person, "other": other, "gngs": gngs, "p1": p1, "p2": p2}
 
+        _db.session.rollback()
         for gng in gngs:
             Result.query.filter_by(game_night_game_id=gng.id).delete()
             _db.session.delete(gng)
@@ -382,6 +384,7 @@ def diplomat_night(app, db):
 
         yield {"gn": gn, "game": game, "p1": p1, "p2": p2, "pl1": pl1, "pl2": pl2, "gng": gng}
 
+        _db.session.rollback()
         Result.query.filter_by(game_night_game_id=gng.id).delete()
         _db.session.delete(gng)
         _db.session.delete(pl1)
@@ -527,6 +530,7 @@ def redemption_setup(app, db):
         tonight = nights[-1]
         yield {"person": person, "game": game, "tonight": tonight, "nights": nights, "gngs": gngs, "players": players, "other": other}
 
+        _db.session.rollback()
         for gng in gngs:
             Result.query.filter_by(game_night_game_id=gng.id).delete()
             _db.session.delete(gng)
@@ -596,6 +600,7 @@ def rematch_setup(app, db):
         _db.session.commit()
         yield {"person": person, "tonight": nights[-1], "nights": nights, "gngs": gngs, "players": players}
 
+        _db.session.rollback()
         for gng in gngs:
             Result.query.filter_by(game_night_game_id=gng.id).delete()
             _db.session.delete(gng)
@@ -659,6 +664,7 @@ def dark_horse_setup(app, db):
         _db.session.commit()
         yield {"person": person, "gn": gn, "gngs": gngs, "pl": pl, "op": op, "other": other, "game": game}
 
+        _db.session.rollback()
         for gng in gngs:
             Result.query.filter_by(game_night_game_id=gng.id).delete()
             _db.session.delete(gng)
@@ -731,6 +737,7 @@ def multi_night_person(app, db):
         yield {"person": person, "other": other, "game": game, "nights": nights,
                "gngs": gngs, "players": players, "last_night": last_night}
 
+        _db.session.rollback()
         PersonBadge.query.filter_by(person_id=person.id).delete()
         PersonBadge.query.filter_by(person_id=other.id).delete()
         _db.session.commit()
@@ -1035,6 +1042,7 @@ def streak_setup(app, db):
         yield {"person": person, "nights": nights, "gngs": gngs, "players": players,
                "last_night": nights[-1], "game": game, "other": other}
 
+        _db.session.rollback()
         PersonBadge.query.filter_by(person_id=person.id).delete()
         _db.session.commit()
         for gng in gngs:
@@ -1099,6 +1107,7 @@ def closer_setup(app, db):
         yield {"person": person, "nights": nights, "gngs": gngs, "players": players,
                "last_night": nights[-1], "game": game, "other": other}
 
+        _db.session.rollback()
         PersonBadge.query.filter_by(person_id=person.id).delete()
         _db.session.commit()
         for gng in gngs:
@@ -1167,6 +1176,7 @@ def nemesis_setup(app, db):
         yield {"person": person, "bully": bully, "game": game,
                "nights": nights, "gngs": gngs, "players": players, "last_night": nights[-1]}
 
+        _db.session.rollback()
         PersonBadge.query.filter_by(person_id=person.id).delete()
         PersonBadge.query.filter_by(person_id=bully.id).delete()
         _db.session.commit()
@@ -1429,6 +1439,7 @@ def oracle_setup(app, db):
         yield {"person": person, "game": game, "nights": nights, "gngs": gngs,
                "players": players, "noms": noms, "last_night": nights[-1], "other": other}
 
+        _db.session.rollback()
         PersonBadge.query.filter_by(person_id=person.id).delete()
         _db.session.commit()
         for nom in noms:
