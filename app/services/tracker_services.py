@@ -33,3 +33,78 @@ def discard_session(session_id):
     if session:
         db.session.delete(session)
         db.session.commit()
+
+
+GLOBAL_FIELD_TYPES = {"global_counter", "global_notes"}
+PER_PLAYER_FIELD_TYPES = {"counter", "checkbox", "player_notes"}
+
+
+def add_field(session_id, *, type, label, starting_value=0, is_score_field=False):
+    """Add a TrackerField to a configuring session. Does not seed values yet."""
+    existing_count = TrackerField.query.filter_by(tracker_session_id=session_id).count()
+    field = TrackerField(
+        tracker_session_id=session_id,
+        type=type,
+        label=label,
+        starting_value=starting_value if type in ("counter", "global_counter") else 0,
+        is_score_field=is_score_field,
+        sort_order=existing_count,
+    )
+    db.session.add(field)
+    db.session.commit()
+    return field
+
+
+def launch_session(session_id, *, mode, teams_data, player_ids):
+    """
+    Activate a configuring session. Seeds all TrackerValue rows.
+
+    teams_data: list of {"name": str, "player_ids": [int]} — only used when mode="teams"
+    player_ids: list of Player.id — all players for the game night (individual mode)
+    """
+    session = TrackerSession.query.get_or_404(session_id)
+    session.mode = mode
+    session.status = "active"
+
+    # Build teams if needed
+    entity_map = []  # list of ("player"|"team", id) pairs
+    if mode == "teams":
+        for td in teams_data:
+            team = TrackerTeam(tracker_session_id=session_id, name=td["name"])
+            db.session.add(team)
+            db.session.flush()
+            for pid in td["player_ids"]:
+                db.session.execute(
+                    tracker_team_players.insert().values(team_id=team.id, player_id=pid)
+                )
+            entity_map.append(("team", team.id))
+    else:
+        entity_map = [("player", pid) for pid in player_ids]
+
+    # Seed TrackerValue rows
+    for field in TrackerField.query.filter_by(tracker_session_id=session_id).all():
+        if field.type in GLOBAL_FIELD_TYPES:
+            _seed_value(session_id, field, player_id=None, team_id=None)
+        else:
+            for entity_type, entity_id in entity_map:
+                if entity_type == "player":
+                    _seed_value(session_id, field, player_id=entity_id, team_id=None)
+                else:
+                    _seed_value(session_id, field, player_id=None, team_id=entity_id)
+
+    db.session.commit()
+    return session
+
+
+def _seed_value(session_id, field, *, player_id, team_id):
+    initial = str(field.starting_value) if field.type in ("counter", "global_counter") else (
+        "false" if field.type == "checkbox" else ""
+    )
+    v = TrackerValue(
+        tracker_session_id=session_id,
+        tracker_field_id=field.id,
+        player_id=player_id,
+        team_id=team_id,
+        value=initial,
+    )
+    db.session.add(v)

@@ -71,3 +71,45 @@ def test_discard_session_removes_session(app, db, tracker_night):
     sid = session.id
     discard_session(sid)
     assert TrackerSession.query.get(sid) is None
+
+
+def test_add_field_creates_tracker_field(app, db, tracker_night):
+    from app.services.tracker_services import get_or_create_configuring_session, add_field
+    session = get_or_create_configuring_session(tracker_night["gng_id"])
+    field = add_field(session.id, type="counter", label="Victory Points", starting_value=0, is_score_field=True)
+    assert field.label == "Victory Points"
+    assert field.type == "counter"
+    assert field.is_score_field is True
+    assert TrackerField.query.filter_by(tracker_session_id=session.id).count() == 1
+
+
+def test_launch_session_seeds_values_for_individual(app, db, tracker_night):
+    from app.services.tracker_services import get_or_create_configuring_session, add_field, launch_session
+    session = get_or_create_configuring_session(tracker_night["gng_id"])
+    add_field(session.id, type="counter", label="VP", starting_value=5, is_score_field=True)
+    add_field(session.id, type="checkbox", label="Has Crown", starting_value=0, is_score_field=False)
+    add_field(session.id, type="global_counter", label="Round", starting_value=1, is_score_field=False)
+
+    launch_session(session.id, mode="individual", teams_data=[],
+                   player_ids=[tracker_night["pl1_id"], tracker_night["pl2_id"]])
+
+    session = TrackerSession.query.get(session.id)
+    assert session.status == "active"
+    assert session.mode == "individual"
+
+    # counter and checkbox → 2 players × 2 fields = 4 per-player values
+    # global_counter → 1 global value
+    values = TrackerValue.query.filter_by(tracker_session_id=session.id).all()
+    assert len(values) == 5
+
+    # Per-player counter starts at 5
+    vp_field = TrackerField.query.filter_by(tracker_session_id=session.id, label="VP").first()
+    vp_values = TrackerValue.query.filter_by(tracker_field_id=vp_field.id).all()
+    assert all(v.value == "5" for v in vp_values)
+
+    # Global counter starts at 1
+    round_field = TrackerField.query.filter_by(tracker_session_id=session.id, label="Round").first()
+    round_val = TrackerValue.query.filter_by(tracker_field_id=round_field.id).first()
+    assert round_val.value == "1"
+    assert round_val.player_id is None
+    assert round_val.team_id is None
