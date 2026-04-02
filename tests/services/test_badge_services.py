@@ -306,6 +306,54 @@ def test_jack_of_all_trades_does_not_earn_when_last(app, db, badge_night):
         assert _check_jack_of_all_trades(badge_night["loser"].id, badge_night["game_night"].id) is False
 
 
+def test_jack_of_all_trades_earns_for_middle_player_in_3_player_game(app, db):
+    # 3 players: top half = positions 1 and 2 (floor((3+1)/2) = 2); position 3 does not earn.
+    from app.services.badge_services import _check_jack_of_all_trades
+    with app.app_context():
+        game = Game(name=f"Jack3Game {uuid.uuid4().hex[:6]}", bgg_id=None)
+        p1 = Person(first_name="J3P1", last_name="X", email=f"j3p1_{uuid.uuid4().hex[:6]}@test.invalid")
+        p2 = Person(first_name="J3P2", last_name="X", email=f"j3p2_{uuid.uuid4().hex[:6]}@test.invalid")
+        p3 = Person(first_name="J3P3", last_name="X", email=f"j3p3_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, p1, p2, p3])
+        _db.session.flush()
+
+        gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=2), final=True)
+        _db.session.add(gn)
+        _db.session.flush()
+
+        pl1 = Player(game_night_id=gn.id, people_id=p1.id)
+        pl2 = Player(game_night_id=gn.id, people_id=p2.id)
+        pl3 = Player(game_night_id=gn.id, people_id=p3.id)
+        _db.session.add_all([pl1, pl2, pl3])
+        _db.session.flush()
+
+        gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+        _db.session.add(gng)
+        _db.session.flush()
+
+        _db.session.add(Result(game_night_game_id=gng.id, player_id=pl1.id, position=1, score=30))
+        _db.session.add(Result(game_night_game_id=gng.id, player_id=pl2.id, position=2, score=20))
+        _db.session.add(Result(game_night_game_id=gng.id, player_id=pl3.id, position=3, score=10))
+        _db.session.commit()
+
+        assert _check_jack_of_all_trades(p1.id, gn.id) is True
+        assert _check_jack_of_all_trades(p2.id, gn.id) is True
+        assert _check_jack_of_all_trades(p3.id, gn.id) is False
+
+        Result.query.filter_by(game_night_game_id=gng.id).delete()
+        _db.session.delete(gng)
+        _db.session.delete(pl1)
+        _db.session.delete(pl2)
+        _db.session.delete(pl3)
+        PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+        _db.session.delete(gn)
+        _db.session.delete(p1)
+        _db.session.delete(p2)
+        _db.session.delete(p3)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
 @pytest.fixture()
 def diplomat_night(app, db):
     """A game night where all players tied at position 1."""
