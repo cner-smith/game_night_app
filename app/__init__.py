@@ -29,6 +29,7 @@ def register_blueprints(app):
     app.register_blueprint(blueprints.main_bp)
     app.register_blueprint(blueprints.api_bp)
     app.register_blueprint(blueprints.polls_bp)
+    app.register_blueprint(blueprints.tracker_bp)
     # test_bp removed — was a debug artifact registered unconditionally
 
 
