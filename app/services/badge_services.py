@@ -127,28 +127,29 @@ def _check_variety_pack(person_id: int, game_night_id: int) -> bool:
     return (count or 0) >= 10
 
 def _check_nemesis(person_id: int, game_night_id: int) -> bool:
-    person_results = (
-        db.session.query(Result.game_night_game_id, Result.position)
-        .join(Player, Result.player_id == Player.id)
-        .filter(Player.people_id == person_id, Result.position.isnot(None))
-        .all()
-    )
-    nemesis_counts: dict = {}
-    for gng_id, pos in person_results:
-        opponents = (
-            db.session.query(Player.people_id)
-            .join(Result, Player.id == Result.player_id)
-            .filter(
-                Result.game_night_game_id == gng_id,
-                Player.people_id != person_id,
-                Result.position < pos,
-                Result.position.isnot(None),
-            )
-            .all()
+    person_alias = db.aliased(Player)
+    opp_alias = db.aliased(Player)
+    person_result = db.aliased(Result)
+    opp_result = db.aliased(Result)
+
+    row = (
+        db.session.query(func.count().label("beat_count"))
+        .select_from(person_result)
+        .join(person_alias, person_result.player_id == person_alias.id)
+        .join(opp_result, person_result.game_night_game_id == opp_result.game_night_game_id)
+        .join(opp_alias, opp_result.player_id == opp_alias.id)
+        .filter(
+            person_alias.people_id == person_id,
+            opp_alias.people_id != person_id,
+            opp_result.position < person_result.position,
+            person_result.position.isnot(None),
+            opp_result.position.isnot(None),
         )
-        for (opp_id,) in opponents:
-            nemesis_counts[opp_id] = nemesis_counts.get(opp_id, 0) + 1
-    return any(count >= 5 for count in nemesis_counts.values())
+        .group_by(opp_alias.people_id)
+        .having(func.count() >= 5)
+        .first()
+    )
+    return row is not None
 
 def _check_redemption_arc(person_id: int, game_night_id: int) -> bool:
     won_tonight = (
@@ -249,24 +250,28 @@ def _check_jack_of_all_trades(person_id: int, game_night_id: int) -> bool:
 
 def _check_upset_special(person_id: int, game_night_id: int) -> bool:
     tonight_gng_ids = [
-        r.id
-        for r in GameNightGame.query.filter_by(game_night_id=game_night_id).all()
+        r.id for r in GameNightGame.query.filter_by(game_night_id=game_night_id).all()
     ]
-    for gng_id in tonight_gng_ids:
-        person_pos = (
-            db.session.query(Result.position)
+    if not tonight_gng_ids:
+        return False
+
+    person_tonight = {
+        r.game_night_game_id: r.position
+        for r in (
+            db.session.query(Result.game_night_game_id, Result.position)
             .join(Player, Result.player_id == Player.id)
             .filter(
                 Player.people_id == person_id,
-                Result.game_night_game_id == gng_id,
+                Result.game_night_game_id.in_(tonight_gng_ids),
                 Result.position.isnot(None),
             )
-            .scalar()
+            .all()
         )
-        if person_pos is None:
-            continue
+    }
 
-        beaten = (
+    beaten_opp_ids: set = set()
+    for gng_id, person_pos in person_tonight.items():
+        for (opp_id,) in (
             db.session.query(Player.people_id)
             .join(Result, Player.id == Result.player_id)
             .filter(
@@ -276,45 +281,40 @@ def _check_upset_special(person_id: int, game_night_id: int) -> bool:
                 Result.position.isnot(None),
             )
             .all()
-        )
-        for (opp_id,) in beaten:
-            prior = (
-                db.session.query(Result.game_night_game_id)
-                .join(Player, Result.player_id == Player.id)
-                .filter(
-                    Player.people_id == opp_id,
-                    Result.game_night_game_id.in_(
-                        db.session.query(Result.game_night_game_id)
-                        .join(Player, Result.player_id == Player.id)
-                        .filter(
-                            Player.people_id == person_id,
-                            Result.game_night_game_id.notin_(tonight_gng_ids),
-                        )
-                    ),
-                )
-                .all()
+        ):
+            beaten_opp_ids.add(opp_id)
+
+    if not beaten_opp_ids:
+        return False
+
+    person_alias = db.aliased(Player)
+    opp_alias = db.aliased(Player)
+    p_result = db.aliased(Result)
+    o_result = db.aliased(Result)
+
+    for opp_id in beaten_opp_ids:
+        rows = (
+            db.session.query(
+                p_result.position.label("p_pos"),
+                o_result.position.label("o_pos"),
             )
-            if len(prior) < 5:
-                continue
-            prior_gng_ids = [r.game_night_game_id for r in prior]
-            opp_wins = 0
-            for pgng_id in prior_gng_ids:
-                p_pos = (
-                    db.session.query(Result.position)
-                    .join(Player, Result.player_id == Player.id)
-                    .filter(Player.people_id == person_id, Result.game_night_game_id == pgng_id)
-                    .scalar()
-                )
-                o_pos = (
-                    db.session.query(Result.position)
-                    .join(Player, Result.player_id == Player.id)
-                    .filter(Player.people_id == opp_id, Result.game_night_game_id == pgng_id)
-                    .scalar()
-                )
-                if p_pos and o_pos and o_pos < p_pos:
-                    opp_wins += 1
-            if opp_wins / len(prior_gng_ids) >= 0.8:
-                return True
+            .join(person_alias, p_result.player_id == person_alias.id)
+            .join(o_result, p_result.game_night_game_id == o_result.game_night_game_id)
+            .join(opp_alias, o_result.player_id == opp_alias.id)
+            .filter(
+                person_alias.people_id == person_id,
+                opp_alias.people_id == opp_id,
+                p_result.game_night_game_id.notin_(tonight_gng_ids),
+                p_result.position.isnot(None),
+                o_result.position.isnot(None),
+            )
+            .all()
+        )
+        if len(rows) < 5:
+            continue
+        opp_wins = sum(1 for r in rows if r.o_pos < r.p_pos)
+        if opp_wins / len(rows) >= 0.8:
+            return True
     return False
 
 def _check_bench_warmer(person_id: int, game_night_id: int) -> bool:
@@ -384,27 +384,38 @@ def _check_the_closer(person_id: int, game_night_id: int) -> bool:
     if len(attended) < 5:
         return False
 
+    night_ids = [nid for (nid,) in attended]
+
+    last_round_sq = (
+        db.session.query(
+            GameNightGame.game_night_id,
+            func.max(GameNightGame.round).label("max_round"),
+        )
+        .filter(GameNightGame.game_night_id.in_(night_ids))
+        .group_by(GameNightGame.game_night_id)
+        .subquery()
+    )
+
+    closed_nights = {
+        nid
+        for (nid,) in (
+            db.session.query(GameNightGame.game_night_id)
+            .join(
+                last_round_sq,
+                (GameNightGame.game_night_id == last_round_sq.c.game_night_id)
+                & (GameNightGame.round == last_round_sq.c.max_round),
+            )
+            .join(Result, GameNightGame.id == Result.game_night_game_id)
+            .join(Player, Result.player_id == Player.id)
+            .filter(Player.people_id == person_id, Result.position == 1)
+            .distinct()
+            .all()
+        )
+    }
+
     streak = 0
     for (nid,) in attended:
-        last_game = (
-            GameNightGame.query.filter_by(game_night_id=nid)
-            .order_by(GameNightGame.round.desc())
-            .first()
-        )
-        if not last_game:
-            streak = 0
-            continue
-        won_last = (
-            db.session.query(Result)
-            .join(Player, Result.player_id == Player.id)
-            .filter(
-                Player.people_id == person_id,
-                Result.game_night_game_id == last_game.id,
-                Result.position == 1,
-            )
-            .first()
-        )
-        if won_last:
+        if nid in closed_nights:
             streak += 1
             if streak >= 5:
                 return True
@@ -432,20 +443,26 @@ def _check_winning_streak(person_id: int, game_night_id: int) -> bool:
     if len(attended) < 3:
         return False
 
-    streak = 0
-    for (nid,) in attended:
-        won = (
-            db.session.query(Result)
+    win_night_ids = {
+        nid
+        for (nid,) in (
+            db.session.query(GameNight.id)
+            .join(GameNightGame, GameNight.id == GameNightGame.game_night_id)
+            .join(Result, GameNightGame.id == Result.game_night_game_id)
             .join(Player, Result.player_id == Player.id)
-            .join(GameNightGame, Result.game_night_game_id == GameNightGame.id)
             .filter(
                 Player.people_id == person_id,
-                GameNightGame.game_night_id == nid,
                 Result.position == 1,
+                GameNight.final.is_(True),
             )
-            .first()
+            .distinct()
+            .all()
         )
-        if won:
+    }
+
+    streak = 0
+    for (nid,) in attended:
+        if nid in win_night_ids:
             streak += 1
             if streak >= 3:
                 return True
@@ -482,16 +499,25 @@ def _check_the_diplomat(person_id: int, game_night_id: int) -> bool:
     return True
 
 def _check_early_bird(person_id: int, game_night_id: int) -> bool:
-    # Player.created_at exists — use it to determine who registered first per night
-    all_night_ids = [
-        row[0] for row in db.session.query(Player.game_night_id).distinct().all()
-    ]
-    first_count = 0
-    for nid in all_night_ids:
-        first_player = Player.query.filter_by(game_night_id=nid).order_by(Player.created_at).first()
-        if first_player and first_player.people_id == person_id:
-            first_count += 1
-    return first_count >= 10
+    # First registered player per finalized night (use Player.id as proxy for insertion order)
+    first_player_per_night = (
+        db.session.query(
+            Player.game_night_id,
+            func.min(Player.id).label("first_player_id"),
+        )
+        .join(GameNight, Player.game_night_id == GameNight.id)
+        .filter(GameNight.final.is_(True))
+        .group_by(Player.game_night_id)
+        .subquery()
+    )
+    first_count = (
+        db.session.query(func.count())
+        .select_from(Player)
+        .join(first_player_per_night, Player.id == first_player_per_night.c.first_player_id)
+        .filter(Player.people_id == person_id)
+        .scalar()
+    )
+    return (first_count or 0) >= 10
 
 def _check_the_rematch(person_id: int, game_night_id: int) -> bool:
     prev_player = (
@@ -580,35 +606,29 @@ def _check_social_butterfly(person_id: int, game_night_id: int) -> bool:
 
 
 def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
-    finalized_nights = (
-        db.session.query(GameNight.id).filter(GameNight.final.is_(True)).all()
-    )
-    oracle_count = 0
-    for (nid,) in finalized_nights:
-        nominations = (
-            db.session.query(GameNominations.game_id)
-            .join(Player, GameNominations.player_id == Player.id)
-            .filter(Player.people_id == person_id, GameNominations.game_night_id == nid)
-            .all()
+    nom_player = db.aliased(Player)
+    win_player = db.aliased(Player)
+
+    oracle_nights = (
+        db.session.query(func.count(func.distinct(GameNominations.game_night_id)))
+        .join(nom_player, GameNominations.player_id == nom_player.id)
+        .join(
+            GameNightGame,
+            (GameNightGame.game_night_id == GameNominations.game_night_id)
+            & (GameNightGame.game_id == GameNominations.game_id),
         )
-        for (game_id,) in nominations:
-            played = GameNightGame.query.filter_by(game_night_id=nid, game_id=game_id).first()
-            if not played:
-                continue
-            won = (
-                db.session.query(Result)
-                .join(Player, Result.player_id == Player.id)
-                .filter(
-                    Player.people_id == person_id,
-                    Result.game_night_game_id == played.id,
-                    Result.position == 1,
-                )
-                .first()
-            )
-            if won:
-                oracle_count += 1
-                break
-    return oracle_count >= 5
+        .join(Result, Result.game_night_game_id == GameNightGame.id)
+        .join(win_player, Result.player_id == win_player.id)
+        .join(GameNight, GameNight.id == GameNominations.game_night_id)
+        .filter(
+            nom_player.people_id == person_id,
+            win_player.people_id == person_id,
+            Result.position == 1,
+            GameNight.final.is_(True),
+        )
+        .scalar()
+    )
+    return (oracle_nights or 0) >= 5
 
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
     first_night = GameNight.query.order_by(GameNight.date, GameNight.id).first()
