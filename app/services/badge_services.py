@@ -114,7 +114,7 @@ def _check_kingslayer(person_id: int, game_night_id: int) -> bool:
     return False
 
 def _check_collector(person_id: int, game_night_id: int) -> bool:
-    return OwnedBy.query.filter_by(person_id=person_id).count() >= 10
+    return db.session.query(OwnedBy).filter_by(person_id=person_id).count() >= 10
 
 def _check_variety_pack(person_id: int, game_night_id: int) -> bool:
     count = (
@@ -255,7 +255,7 @@ def _check_jack_of_all_trades(person_id: int, game_night_id: int) -> bool:
 
 def _check_upset_special(person_id: int, game_night_id: int) -> bool:
     tonight_gng_ids = [
-        r.id for r in GameNightGame.query.filter_by(game_night_id=game_night_id).all()
+        r.id for r in db.session.query(GameNightGame).filter_by(game_night_id=game_night_id).all()
     ]
     if not tonight_gng_ids:
         return False
@@ -429,11 +429,11 @@ def _check_the_closer(person_id: int, game_night_id: int) -> bool:
     return False
 
 def _check_opening_night(person_id: int, game_night_id: int) -> bool:
-    first_night = GameNight.query.order_by(GameNight.date, GameNight.id).first()
+    first_night = db.session.query(GameNight).order_by(GameNight.date, GameNight.id).first()
     if first_night is None:
         return False
     return (
-        Player.query.filter_by(game_night_id=first_night.id, people_id=person_id).first()
+        db.session.query(Player).filter_by(game_night_id=first_night.id, people_id=person_id).first()
         is not None
     )
 
@@ -476,9 +476,9 @@ def _check_winning_streak(person_id: int, game_night_id: int) -> bool:
     return False
 
 def _check_the_diplomat(person_id: int, game_night_id: int) -> bool:
-    if not Player.query.filter_by(game_night_id=game_night_id, people_id=person_id).first():
+    if not db.session.query(Player).filter_by(game_night_id=game_night_id, people_id=person_id).first():
         return False
-    games = GameNightGame.query.filter_by(game_night_id=game_night_id).all()
+    games = db.session.query(GameNightGame).filter_by(game_night_id=game_night_id).all()
     if not games:
         return False
     for gng in games:
@@ -541,11 +541,11 @@ def _check_the_rematch(person_id: int, game_night_id: int) -> bool:
 
     current_game_ids = {
         r.game_id
-        for r in GameNightGame.query.filter_by(game_night_id=game_night_id).all()
+        for r in db.session.query(GameNightGame).filter_by(game_night_id=game_night_id).all()
     }
     prev_game_ids = {
         r.game_id
-        for r in GameNightGame.query.filter_by(game_night_id=prev_player.game_night_id).all()
+        for r in db.session.query(GameNightGame).filter_by(game_night_id=prev_player.game_night_id).all()
     }
     return bool(current_game_ids & prev_game_ids)
 
@@ -593,7 +593,7 @@ def _check_dark_horse(person_id: int, game_night_id: int) -> bool:
     return results[-1].position == 1
 
 def _check_social_butterfly(person_id: int, game_night_id: int) -> bool:
-    all_people_count = Person.query.count()
+    all_people_count = db.session.query(Person).count()
     distinct_partners = (
         db.session.query(func.count(func.distinct(Player.people_id)))
         .join(Result, Player.id == Result.player_id)
@@ -636,7 +636,7 @@ def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
     return (oracle_nights or 0) >= 5
 
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
-    first_night = GameNight.query.order_by(GameNight.date, GameNight.id).first()
+    first_night = db.session.query(GameNight).order_by(GameNight.date, GameNight.id).first()
     if first_night is None:
         return False
     first_five = (
@@ -720,10 +720,10 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
         if game_night is None or not game_night.final:
             return
 
-        participants = Player.query.filter_by(game_night_id=game_night_id).all()
+        participants = db.session.query(Player).filter_by(game_night_id=game_night_id).all()
         person_ids = [p.people_id for p in participants]
 
-        badges = {b.key: b for b in Badge.query.all()}
+        badges = {b.key: b for b in db.session.query(Badge).all()}
 
         for badge_key, checker_fn in _BADGE_REGISTRY.items():
             badge = badges.get(badge_key)
