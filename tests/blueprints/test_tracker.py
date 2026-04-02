@@ -73,3 +73,49 @@ def test_setup_get_unauthenticated_redirects(client, db, seed_data):
     resp = client.get(f"/game_night/{seed_data['game_night_id']}/tracker/new")
     assert resp.status_code == 302
     assert "/login" in resp.headers["Location"]
+
+
+def test_live_tracker_loads(app, db, auth_tracker_client):
+    from app.services.tracker_services import get_or_create_configuring_session, add_field, launch_session
+    c = auth_tracker_client["client"]
+    gng_id = auth_tracker_client["gng_id"]
+    session = get_or_create_configuring_session(gng_id)
+    add_field(session.id, type="counter", label="VP", starting_value=0, is_score_field=True)
+    launch_session(session.id, mode="individual", teams_data=[],
+                   player_ids=[auth_tracker_client["player_id"]])
+    resp = c.get(f"/tracker/{session.id}")
+    assert resp.status_code == 200
+    assert b"VP" in resp.data
+
+
+def test_add_field_htmx_returns_fragment(app, db, auth_tracker_client):
+    from app.services.tracker_services import get_or_create_configuring_session
+    c = auth_tracker_client["client"]
+    gng_id = auth_tracker_client["gng_id"]
+    session = get_or_create_configuring_session(gng_id)
+    resp = c.post(f"/tracker/{session.id}/field", data={
+        "type": "counter", "label": "Life", "starting_value": "20", "is_score_field": "true"
+    })
+    assert resp.status_code == 200
+    assert b"Life" in resp.data
+    assert TrackerField.query.filter_by(tracker_session_id=session.id, label="Life").first() is not None
+
+
+def test_value_update_htmx_returns_cell(app, db, auth_tracker_client):
+    from app.services.tracker_services import get_or_create_configuring_session, add_field, launch_session
+    from app.models import TrackerValue
+    c = auth_tracker_client["client"]
+    gng_id = auth_tracker_client["gng_id"]
+    session = get_or_create_configuring_session(gng_id)
+    field = add_field(session.id, type="counter", label="VP", starting_value=0, is_score_field=True)
+    launch_session(session.id, mode="individual", teams_data=[],
+                   player_ids=[auth_tracker_client["player_id"]])
+    resp = c.post(f"/tracker/{session.id}/value", data={
+        "field_id": str(field.id),
+        "entity_type": "player",
+        "entity_id": str(auth_tracker_client["player_id"]),
+        "delta": "1",
+    })
+    assert resp.status_code == 200
+    val = TrackerValue.query.filter_by(tracker_field_id=field.id, player_id=auth_tracker_client["player_id"]).first()
+    assert val.value == "1"

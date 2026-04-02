@@ -62,3 +62,61 @@ def launch_tracker(gng_id):
 
     tracker_services.launch_session(session_id, mode=mode, teams_data=teams_data, player_ids=player_ids)
     return redirect(url_for("tracker.live_tracker", session_id=session_id))
+
+
+@tracker_bp.route("/tracker/<int:session_id>")
+@login_required
+def live_tracker(session_id):
+    session = _get_session_or_404(session_id)
+    _assert_participant_or_admin(session)
+    gn = session.game_night_game.game_night
+    if gn.final:
+        return redirect(url_for("game_night.view_game_night", game_night_id=gn.id))
+    # Batch-load all values for this session in one query
+    all_values = TrackerValue.query.filter_by(tracker_session_id=session_id).all()
+    # Build value lookup: {(field_id, player_id, team_id): TrackerValue}
+    value_map = {(v.tracker_field_id, v.player_id, v.team_id): v for v in all_values}
+    players = Player.query.filter_by(game_night_id=gn.id).all() if session.mode == "individual" else []
+    teams = session.teams if session.mode == "teams" else []
+    global_fields = [f for f in session.fields if f.type in ("global_counter", "global_notes")]
+    player_fields = [f for f in session.fields if f.type not in ("global_counter", "global_notes")]
+    return render_template(
+        "tracker_live.html",
+        session=session, gn=gn, players=players, teams=teams,
+        global_fields=global_fields, player_fields=player_fields, value_map=value_map,
+    )
+
+
+@tracker_bp.route("/tracker/<int:session_id>/field", methods=["POST"])
+@login_required
+def add_field(session_id):
+    session = _get_session_or_404(session_id)
+    _assert_participant_or_admin(session)
+    field_type = request.form["type"]
+    label = request.form["label"]
+    starting_value = int(request.form.get("starting_value", 0))
+    is_score_field = request.form.get("is_score_field", "false").lower() == "true"
+    field = tracker_services.add_field(
+        session_id, type=field_type, label=label,
+        starting_value=starting_value, is_score_field=is_score_field,
+    )
+    return render_template("_tracker_field_row.html", field=field, session=session)
+
+
+@tracker_bp.route("/tracker/<int:session_id>/value", methods=["POST"])
+@login_required
+def update_value(session_id):
+    session = _get_session_or_404(session_id)
+    _assert_participant_or_admin(session)
+    field_id = int(request.form["field_id"])
+    entity_type = request.form["entity_type"]
+    entity_id = int(request.form["entity_id"]) if request.form.get("entity_id") else None
+    delta = int(request.form["delta"]) if request.form.get("delta") else None
+    value = request.form.get("value")
+    tv = tracker_services.update_value(
+        session_id, field_id, entity_type=entity_type, entity_id=entity_id,
+        delta=delta, value=value,
+    )
+    field = TrackerField.query.get(field_id)
+    return render_template("_tracker_cell.html", tv=tv, field=field, session=session,
+                           entity_type=entity_type, entity_id=entity_id)
