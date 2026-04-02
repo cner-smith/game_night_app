@@ -1,7 +1,7 @@
 """add_achievement_badges
 
 Revision ID: 8b9f3a3784a3
-Revises: 83f9da8656a8
+Revises: c5d6e7f8a9b0
 Create Date: 2026-04-01 09:16:15.099059
 
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '8b9f3a3784a3'
-down_revision = '83f9da8656a8'
+down_revision = 'c5d6e7f8a9b0'
 branch_labels = None
 depends_on = None
 
