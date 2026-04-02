@@ -8,6 +8,7 @@ Public API:
 import logging
 
 from sqlalchemy import func
+from sqlalchemy.orm import joinedload
 
 from app.extensions import db
 from app.models import (
@@ -764,9 +765,8 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
 
 def get_person_badges(person_id: int) -> list:
     """Return all earned badges for a person, newest first."""
-    from sqlalchemy.orm import joinedload
     return (
-        PersonBadge.query
+        db.session.query(PersonBadge)
         .filter_by(person_id=person_id)
         .options(joinedload(PersonBadge.badge))
         .order_by(PersonBadge.earned_at.desc())
