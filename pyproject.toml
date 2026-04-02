@@ -6,6 +6,9 @@ target-version = "py311"
 select = ["E", "F", "I", "UP"]
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+known-third-party = ["flask_session"]
+
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
