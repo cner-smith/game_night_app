@@ -133,8 +133,10 @@ def test_evaluate_badges_does_not_raise_on_bad_night(app, db):
     from app.services.badge_services import evaluate_badges_for_night
 
     with app.app_context():
-        # Non-existent game night ID — should not raise
         evaluate_badges_for_night(999999)
+        # Must not write any PersonBadge rows for the nonexistent night
+        count = PersonBadge.query.filter_by(game_night_id=999999).count()
+        assert count == 0
 
 
 def test_evaluate_badges_skips_unfinalized_night(app, db, badge_night):
@@ -656,7 +658,7 @@ def multi_night_person(app, db):
         players = []
         gngs = []
         # 25 nights, all in the same month/year for night_owl testing on subset
-        base = datetime.date.today().replace(day=1) - datetime.timedelta(days=60)
+        base = datetime.date(2010, 6, 1)  # Fixed: June 2010 — 25 consecutive days stay in same month
         for i in range(25):
             gn = GameNight(date=base + datetime.timedelta(days=i), final=True)
             _db.session.add(gn)
@@ -710,18 +712,115 @@ def test_veteran_does_not_earn_before_25(app, db, badge_night):
         assert _check_veteran(badge_night["winner"].id, badge_night["game_night"].id) is False
 
 
-def test_century_club_earns_at_100_games(app, db, multi_night_person):
+def test_century_club_does_not_earn_with_25_games(app, db, multi_night_person):
     from app.services.badge_services import _check_century_club
     # 25 nights * 1 game each = 25 games — not enough for 100
     with app.app_context():
         assert _check_century_club(multi_night_person["person"].id, multi_night_person["last_night"].id) is False
 
 
-def test_variety_pack_earns_with_10_different_games(app, db, multi_night_person):
+def test_century_club_earns_at_100_games(app, db):
+    """century_club earns when a person has played 100+ games across finalized nights."""
+    from app.services.badge_services import _check_century_club
+
+    with app.app_context():
+        game = Game(name=f"CGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Century", last_name="Player",
+                        email=f"century_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Oth", last_name="C",
+                       email=f"othc_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, other])
+        _db.session.flush()
+
+        nights, players, gngs = [], [], []
+        for i in range(100):
+            gn = GameNight(date=datetime.date(2000, 1, 1) + datetime.timedelta(days=i), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            op = Player(game_night_id=gn.id, people_id=other.id)
+            _db.session.add_all([pl, op])
+            _db.session.flush()
+            players.extend([pl, op])
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=1))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=2))
+        _db.session.commit()
+
+        assert _check_century_club(person.id, nights[-1].id) is True
+
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl in players:
+            _db.session.delete(pl)
+        for gn in nights:
+            PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+            _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(other)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_variety_pack_does_not_earn_with_1_unique_game(app, db, multi_night_person):
     from app.services.badge_services import _check_variety_pack
     with app.app_context():
         # multi_night_person uses same game every night, so only 1 unique game
         assert _check_variety_pack(multi_night_person["person"].id, multi_night_person["last_night"].id) is False
+
+
+def test_variety_pack_earns_with_10_different_games(app, db):
+    """variety_pack earns when a person has played 10+ distinct games."""
+    from app.services.badge_services import _check_variety_pack
+
+    with app.app_context():
+        games = [Game(name=f"VGame{i}_{uuid.uuid4().hex[:4]}", bgg_id=None) for i in range(10)]
+        person = Person(first_name="Var", last_name="Pack",
+                        email=f"varpack_{uuid.uuid4().hex[:6]}@test.invalid")
+        other = Person(first_name="Oth", last_name="Var",
+                       email=f"othvar_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all(games + [person, other])
+        _db.session.flush()
+
+        nights, players, gngs = [], [], []
+        for i, game in enumerate(games):
+            gn = GameNight(date=datetime.date(2001, 1, 1) + datetime.timedelta(days=i), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            op = Player(game_night_id=gn.id, people_id=other.id)
+            _db.session.add_all([pl, op])
+            _db.session.flush()
+            players.extend([pl, op])
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=1))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=op.id, position=2))
+        _db.session.commit()
+
+        assert _check_variety_pack(person.id, nights[-1].id) is True
+
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl in players:
+            _db.session.delete(pl)
+        for gn in nights:
+            PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+            _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(other)
+        for g in games:
+            _db.session.delete(g)
+        _db.session.commit()
 
 
 def test_night_owl_earns_with_5_in_same_month(app, db, multi_night_person):
@@ -1065,13 +1164,53 @@ def test_most_wins_earns_for_top_winner(app, db, badge_night):
 # Group F: social / nominations
 # ---------------------------------------------------------------------------
 
-def test_social_butterfly_does_not_earn_without_universal_play(app, db, badge_night):
+def test_social_butterfly_does_not_earn_without_universal_play(app, db):
+    """social_butterfly does not earn when person has not played with everyone."""
     from app.services.badge_services import _check_social_butterfly
+
     with app.app_context():
-        # badge_night has 2 people; winner played with loser but there may be others in the DB
-        # At minimum this should not crash
-        result = _check_social_butterfly(badge_night["winner"].id, badge_night["game_night"].id)
-        assert isinstance(result, bool)
+        game = Game(name=f"SBGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        p1 = Person(first_name="SB1", last_name="T",
+                    email=f"sb1_{uuid.uuid4().hex[:6]}@test.invalid")
+        p2 = Person(first_name="SB2", last_name="T",
+                    email=f"sb2_{uuid.uuid4().hex[:6]}@test.invalid")
+        # stranger has never played with p1
+        stranger = Person(first_name="SBStr", last_name="T",
+                          email=f"sbstr_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, p1, p2, stranger])
+        _db.session.flush()
+
+        gn = GameNight(date=datetime.date.today() - datetime.timedelta(days=5), final=True)
+        _db.session.add(gn)
+        _db.session.flush()
+
+        pl1 = Player(game_night_id=gn.id, people_id=p1.id)
+        pl2 = Player(game_night_id=gn.id, people_id=p2.id)
+        _db.session.add_all([pl1, pl2])
+        _db.session.flush()
+
+        gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+        _db.session.add(gng)
+        _db.session.flush()
+
+        _db.session.add(Result(game_night_game_id=gng.id, player_id=pl1.id, position=1))
+        _db.session.add(Result(game_night_game_id=gng.id, player_id=pl2.id, position=2))
+        _db.session.commit()
+
+        # p1 played with p2 but not stranger — should not earn
+        assert _check_social_butterfly(p1.id, gn.id) is False
+
+        Result.query.filter_by(game_night_game_id=gng.id).delete()
+        _db.session.delete(gng)
+        _db.session.delete(pl1)
+        _db.session.delete(pl2)
+        PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+        _db.session.delete(gn)
+        _db.session.delete(p1)
+        _db.session.delete(p2)
+        _db.session.delete(stranger)
+        _db.session.delete(game)
+        _db.session.commit()
 
 
 @pytest.fixture()
