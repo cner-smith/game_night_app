@@ -849,15 +849,23 @@ def test_gracious_host_earns_with_perfect_attendance(app, db, multi_night_person
 def test_gracious_host_does_not_earn_when_missed_a_night(app, db, multi_night_person):
     from app.services.badge_services import _check_gracious_host
     with app.app_context():
-        from app.models import GameNight as GN
-        year = multi_night_person["nights"][0].date.year
-        assert _check_gracious_host(multi_night_person["other"].id, multi_night_person["last_night"].id) is True
-        stranger = Person(first_name="S", last_name="T",
-                          email=f"stranger_{uuid.uuid4().hex[:6]}@test.invalid")
-        _db.session.add(stranger)
+        nights = multi_night_person["nights"]
+        last_night = multi_night_person["last_night"]
+        # Create a person who attended all nights except the last one (24 of 25)
+        almost = Person(first_name="Almost", last_name="There",
+                        email=f"almost_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add(almost)
+        _db.session.flush()
+        players = []
+        for night in nights[:-1]:  # all except last_night (index 24)
+            pl = Player(game_night_id=night.id, people_id=almost.id)
+            _db.session.add(pl)
+            players.append(pl)
         _db.session.commit()
-        assert _check_gracious_host(stranger.id, multi_night_person["last_night"].id) is False
-        _db.session.delete(stranger)
+        assert _check_gracious_host(almost.id, last_night.id) is False
+        for pl in players:
+            _db.session.delete(pl)
+        _db.session.delete(almost)
         _db.session.commit()
 
 
