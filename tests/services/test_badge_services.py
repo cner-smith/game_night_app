@@ -1147,10 +1147,129 @@ def test_kingslayer_earns_when_beating_top_winner(app, db, badge_night):
         assert _check_kingslayer(badge_night["winner"].id, badge_night["game_night"].id) is False
 
 
+def test_kingslayer_earns_when_underdog_beats_all_time_leader(app, db):
+    """kingslayer earns when you beat the person with the most all-time wins tonight."""
+    from app.services.badge_services import _check_kingslayer
+
+    with app.app_context():
+        game = Game(name=f"KSGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        champion = Person(first_name="Champ", last_name="KS",
+                          email=f"champ_{uuid.uuid4().hex[:6]}@test.invalid")
+        underdog = Person(first_name="Under", last_name="Dog",
+                          email=f"underdog_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, champion, underdog])
+        _db.session.flush()
+
+        # Champion wins 5 prior nights
+        prior_nights, prior_players, prior_gngs = [], [], []
+        for i in range(5):
+            gn = GameNight(date=datetime.date(2002, 1, i + 1), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            prior_nights.append(gn)
+            champ_pl = Player(game_night_id=gn.id, people_id=champion.id)
+            und_pl = Player(game_night_id=gn.id, people_id=underdog.id)
+            _db.session.add_all([champ_pl, und_pl])
+            _db.session.flush()
+            prior_players.extend([champ_pl, und_pl])
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            prior_gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=champ_pl.id, position=1))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=und_pl.id, position=2))
+
+        # Tonight: underdog wins, champion loses
+        tonight = GameNight(date=datetime.date(2002, 1, 10), final=True)
+        _db.session.add(tonight)
+        _db.session.flush()
+        t_champ = Player(game_night_id=tonight.id, people_id=champion.id)
+        t_under = Player(game_night_id=tonight.id, people_id=underdog.id)
+        _db.session.add_all([t_champ, t_under])
+        _db.session.flush()
+        t_gng = GameNightGame(game_night_id=tonight.id, game_id=game.id, round=1)
+        _db.session.add(t_gng)
+        _db.session.flush()
+        _db.session.add(Result(game_night_game_id=t_gng.id, player_id=t_under.id, position=1))
+        _db.session.add(Result(game_night_game_id=t_gng.id, player_id=t_champ.id, position=2))
+        _db.session.commit()
+
+        assert _check_kingslayer(underdog.id, tonight.id) is True
+        assert _check_kingslayer(champion.id, tonight.id) is False
+
+        Result.query.filter_by(game_night_game_id=t_gng.id).delete()
+        _db.session.delete(t_gng)
+        _db.session.delete(t_champ)
+        _db.session.delete(t_under)
+        PersonBadge.query.filter_by(game_night_id=tonight.id).delete()
+        _db.session.delete(tonight)
+        for gng in prior_gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl in prior_players:
+            _db.session.delete(pl)
+        for gn in prior_nights:
+            PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+            _db.session.delete(gn)
+        _db.session.delete(champion)
+        _db.session.delete(underdog)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
 def test_grudge_match_does_not_earn_before_10_shared_games(app, db, badge_night):
     from app.services.badge_services import _check_grudge_match
     with app.app_context():
         assert _check_grudge_match(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+def test_grudge_match_earns_after_10_shared_games_of_same_type(app, db):
+    """grudge_match earns when person has played the same game vs same opponent 10+ times."""
+    from app.services.badge_services import _check_grudge_match
+
+    with app.app_context():
+        game = Game(name=f"GrudgeGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        person = Person(first_name="Grudge", last_name="One",
+                        email=f"grudge1_{uuid.uuid4().hex[:6]}@test.invalid")
+        rival = Person(first_name="Grudge", last_name="Two",
+                       email=f"grudge2_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, person, rival])
+        _db.session.flush()
+
+        nights, players, gngs = [], [], []
+        for i in range(10):
+            gn = GameNight(date=datetime.date(2003, 1, i + 1), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+            pl = Player(game_night_id=gn.id, people_id=person.id)
+            rv = Player(game_night_id=gn.id, people_id=rival.id)
+            _db.session.add_all([pl, rv])
+            _db.session.flush()
+            players.extend([pl, rv])
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=pl.id, position=1))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=rv.id, position=2))
+        _db.session.commit()
+
+        assert _check_grudge_match(person.id, nights[-1].id) is True
+        assert _check_grudge_match(rival.id, nights[-1].id) is True
+
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl in players:
+            _db.session.delete(pl)
+        for gn in nights:
+            PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+            _db.session.delete(gn)
+        _db.session.delete(person)
+        _db.session.delete(rival)
+        _db.session.delete(game)
+        _db.session.commit()
 
 
 def test_most_wins_earns_for_top_winner(app, db, badge_night):
@@ -1282,3 +1401,130 @@ def test_the_oracle_does_not_earn_with_fewer_than_5(app, db, badge_night):
     from app.services.badge_services import _check_the_oracle
     with app.app_context():
         assert _check_the_oracle(badge_night["winner"].id, badge_night["game_night"].id) is False
+
+
+# ---------------------------------------------------------------------------
+# Group G: upset_special / early_bird positive-path
+# ---------------------------------------------------------------------------
+
+def test_upset_special_earns_when_beating_dominant_opponent(app, db):
+    """upset_special earns when you beat an opponent who had 80%+ win rate against you (min 5 games)."""
+    from app.services.badge_services import _check_upset_special
+
+    with app.app_context():
+        game = Game(name=f"UpsetGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        underdog = Person(first_name="Upset", last_name="Hero",
+                          email=f"upset_hero_{uuid.uuid4().hex[:6]}@test.invalid")
+        dominant = Person(first_name="Upset", last_name="Dominant",
+                          email=f"upset_dom_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, underdog, dominant])
+        _db.session.flush()
+
+        # 5 prior games: dominant wins all 5
+        prior_nights, prior_players, prior_gngs = [], [], []
+        for i in range(5):
+            gn = GameNight(date=datetime.date(2004, 1, i + 1), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            prior_nights.append(gn)
+            und_pl = Player(game_night_id=gn.id, people_id=underdog.id)
+            dom_pl = Player(game_night_id=gn.id, people_id=dominant.id)
+            _db.session.add_all([und_pl, dom_pl])
+            _db.session.flush()
+            prior_players.extend([und_pl, dom_pl])
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            prior_gngs.append(gng)
+            # Dominant wins (lower position = better)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=dom_pl.id, position=1))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=und_pl.id, position=2))
+
+        # Tonight: underdog wins
+        tonight = GameNight(date=datetime.date(2004, 1, 10), final=True)
+        _db.session.add(tonight)
+        _db.session.flush()
+        t_und = Player(game_night_id=tonight.id, people_id=underdog.id)
+        t_dom = Player(game_night_id=tonight.id, people_id=dominant.id)
+        _db.session.add_all([t_und, t_dom])
+        _db.session.flush()
+        t_gng = GameNightGame(game_night_id=tonight.id, game_id=game.id, round=1)
+        _db.session.add(t_gng)
+        _db.session.flush()
+        _db.session.add(Result(game_night_game_id=t_gng.id, player_id=t_und.id, position=1))
+        _db.session.add(Result(game_night_game_id=t_gng.id, player_id=t_dom.id, position=2))
+        _db.session.commit()
+
+        assert _check_upset_special(underdog.id, tonight.id) is True
+        assert _check_upset_special(dominant.id, tonight.id) is False
+
+        Result.query.filter_by(game_night_game_id=t_gng.id).delete()
+        _db.session.delete(t_gng)
+        _db.session.delete(t_und)
+        _db.session.delete(t_dom)
+        PersonBadge.query.filter_by(game_night_id=tonight.id).delete()
+        _db.session.delete(tonight)
+        for gng in prior_gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl in prior_players:
+            _db.session.delete(pl)
+        for gn in prior_nights:
+            PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+            _db.session.delete(gn)
+        _db.session.delete(underdog)
+        _db.session.delete(dominant)
+        _db.session.delete(game)
+        _db.session.commit()
+
+
+def test_early_bird_earns_after_being_first_10_times(app, db):
+    """early_bird earns when person was first to register at 10+ finalized game nights."""
+    from app.services.badge_services import _check_early_bird
+
+    with app.app_context():
+        game = Game(name=f"EBGame {uuid.uuid4().hex[:6]}", bgg_id=None)
+        early = Person(first_name="Early", last_name="Bird",
+                       email=f"early_{uuid.uuid4().hex[:6]}@test.invalid")
+        late = Person(first_name="Late", last_name="Bird",
+                      email=f"late_{uuid.uuid4().hex[:6]}@test.invalid")
+        _db.session.add_all([game, early, late])
+        _db.session.flush()
+
+        nights, players, gngs = [], [], []
+        for i in range(10):
+            gn = GameNight(date=datetime.date(2005, 1, i + 1), final=True)
+            _db.session.add(gn)
+            _db.session.flush()
+            nights.append(gn)
+            # early registers first (lower Player.id by inserting first)
+            early_pl = Player(game_night_id=gn.id, people_id=early.id)
+            _db.session.add(early_pl)
+            _db.session.flush()
+            late_pl = Player(game_night_id=gn.id, people_id=late.id)
+            _db.session.add(late_pl)
+            _db.session.flush()
+            players.extend([early_pl, late_pl])
+            gng = GameNightGame(game_night_id=gn.id, game_id=game.id, round=1)
+            _db.session.add(gng)
+            _db.session.flush()
+            gngs.append(gng)
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=early_pl.id, position=1))
+            _db.session.add(Result(game_night_game_id=gng.id, player_id=late_pl.id, position=2))
+        _db.session.commit()
+
+        assert _check_early_bird(early.id, nights[-1].id) is True
+        assert _check_early_bird(late.id, nights[-1].id) is False
+
+        for gng in gngs:
+            Result.query.filter_by(game_night_game_id=gng.id).delete()
+            _db.session.delete(gng)
+        for pl in players:
+            _db.session.delete(pl)
+        for gn in nights:
+            PersonBadge.query.filter_by(game_night_id=gn.id).delete()
+            _db.session.delete(gn)
+        _db.session.delete(early)
+        _db.session.delete(late)
+        _db.session.delete(game)
+        _db.session.commit()
