@@ -36,6 +36,7 @@ services:
       - MAIL_DEFAULT_SENDER
       - FLASK_APP
       - BGG_API_TOKEN
+      - SESSION_TYPE
     restart: always
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/')"]
