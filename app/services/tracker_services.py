@@ -155,12 +155,16 @@ def update_value(session_id, field_id, *, entity_type, entity_id=None, delta=Non
     player_id = entity_id if entity_type == "player" else None
     team_id = entity_id if entity_type == "team" else None
 
-    tv = TrackerValue.query.filter_by(
-        tracker_session_id=session_id,
-        tracker_field_id=field_id,
-        player_id=player_id,
-        team_id=team_id,
-    ).first()
+    tv = (
+        TrackerValue.query.filter_by(
+            tracker_session_id=session_id,
+            tracker_field_id=field_id,
+            player_id=player_id,
+            team_id=team_id,
+        )
+        .with_for_update()
+        .first()
+    )
     if tv is None:
         raise ValueError(
             f"TrackerValue not found for field {field_id}, entity_type={entity_type}, entity_id={entity_id}"

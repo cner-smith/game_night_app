@@ -443,7 +443,12 @@ def _check_the_closer(person_id: int, game_night_id: int) -> bool:
 
 
 def _check_opening_night(person_id: int, game_night_id: int) -> bool:
-    first_night = db.session.query(GameNight).order_by(GameNight.date, GameNight.id).first()
+    first_night = (
+        db.session.query(GameNight)
+        .filter(GameNight.final.is_(True))
+        .order_by(GameNight.date, GameNight.id)
+        .first()
+    )
     if first_night is None:
         return False
     return (
@@ -666,7 +671,12 @@ def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
 
 
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
-    first_night = db.session.query(GameNight).order_by(GameNight.date, GameNight.id).first()
+    first_night = (
+        db.session.query(GameNight)
+        .filter(GameNight.final.is_(True))
+        .order_by(GameNight.date, GameNight.id)
+        .first()
+    )
     if first_night is None:
         return False
     first_five = (

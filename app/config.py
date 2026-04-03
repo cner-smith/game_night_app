@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 
 from dotenv import load_dotenv
 
@@ -23,8 +24,12 @@ class Config:
     MAIL_DEFAULT_SENDER = os.getenv("MAIL_DEFAULT_SENDER")
 
     # Flask Session Configuration
+    # NOTE: SESSION_TYPE defaults to "filesystem", which is not shared across
+    # Gunicorn workers. For multi-worker production deployments set
+    # SESSION_TYPE=redis and configure SESSION_REDIS.
     SESSION_TYPE = os.getenv("SESSION_TYPE", "filesystem")
     SESSION_PERMANENT = True
+    PERMANENT_SESSION_LIFETIME = timedelta(days=14)
     SESSION_USE_SIGNER = True
     SESSION_COOKIE_PATH = "/"
     SESSION_COOKIE_SECURE = os.getenv("FLASK_DEBUG", "0") != "1"
@@ -32,7 +37,6 @@ class Config:
     SESSION_COOKIE_SAMESITE = "Lax"
 
     # Flask Debug Settings
-    ENV = os.getenv("FLASK_ENV", "production")
     DEBUG = os.getenv("FLASK_DEBUG", "0") == "1"
 
     # Timezone Configuration

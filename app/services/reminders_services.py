@@ -64,8 +64,15 @@ def check_and_send_reminders():
         )
 
         players = Player.query.filter_by(game_night_id=game_night.id).all()
+        people_by_id = {
+            p.id: p
+            for p in Person.query.filter(Person.id.in_([pl.people_id for pl in players])).all()
+        }
+
         for player in players:
-            user = Person.query.get(player.people_id)
+            user = people_by_id.get(player.people_id)
+            if not user or not user.email:
+                continue
 
             has_nominated = GameNominations.query.filter_by(
                 game_night_id=game_night.id, player_id=player.id
@@ -85,9 +92,9 @@ def check_and_send_reminders():
 
             try:
                 send_email(user.email, "Game Night Reminder", html_body)
-                logging.info(f"Reminder email sent to {user.email}")
+                logging.info("Reminder email sent to %s", user.email)
             except Exception as e:
-                logging.error(f"Failed to send reminder email to {user.email}: {e}")
+                logging.error("Failed to send reminder email to %s: %s", user.email, e)
 
 
 def start_scheduler(app):

@@ -34,9 +34,10 @@ def register_blueprints(app):
     # test_bp removed — was a debug artifact registered unconditionally
 
 
-def setup_logging():
+def setup_logging(debug: bool = False):
     """Configure logging."""
-    logging.basicConfig(level=logging.DEBUG)
+    level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(level=level)
 
 
 def register_user_loader(app):
@@ -49,7 +50,18 @@ def register_user_loader(app):
 
 
 def start_schedulers(app):
-    """Start the background scheduler for reminders."""
+    """Start the background scheduler for reminders.
+
+    In multi-worker Gunicorn deployments each worker calls create_app(), which
+    would start N copies of the scheduler and send N reminder emails per run.
+    Set ENABLE_SCHEDULER=false on web worker processes and run a dedicated
+    single-process scheduler worker (e.g. `gunicorn --workers 1`) or a
+    standalone cron process instead.
+    """
+    import os
+
+    if os.getenv("ENABLE_SCHEDULER", "true").lower() != "true":
+        return
     from app.services.reminders_services import start_scheduler
 
     start_scheduler(app)
@@ -67,7 +79,7 @@ def create_app(config_class=None):
             "SECRET_KEY must be set to a secure value in production. Set the SECRET_KEY environment variable."
         )
 
-    setup_logging()
+    setup_logging(debug=app.debug)
     init_extensions(app)
     register_user_loader(app)
     register_blueprints(app)
