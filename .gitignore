@@ -5,6 +5,9 @@
 .superpowers/
 docs/superpowers/
 
+# Claude Code
+.claude/
+
 # Serena MCP
 .serena/
 

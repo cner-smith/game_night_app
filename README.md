@@ -82,7 +82,7 @@ docker run -p 8000:8000 --env-file .env gamenight
 Or use docker-compose:
 
 ```bash
-docker compose -f docker-compose.game_night.yml up
+docker compose up
 ```
 
 ## CI/CD
