@@ -779,16 +779,15 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
 
                 if earned:
                     try:
-                        db.session.add(
-                            PersonBadge(
-                                person_id=person_id,
-                                badge_id=badge.id,
-                                game_night_id=night_id_to_store,
+                        with db.session.begin_nested():
+                            db.session.add(
+                                PersonBadge(
+                                    person_id=person_id,
+                                    badge_id=badge.id,
+                                    game_night_id=night_id_to_store,
+                                )
                             )
-                        )
-                        db.session.flush()
                     except IntegrityError:
-                        db.session.rollback()
                         # Already earned — unique constraint fired, skip silently
                         continue
 

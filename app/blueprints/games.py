@@ -85,10 +85,6 @@ def view_game(game_id):
 @login_required
 def claim_game(game_id):
     success, message = games_services.modify_ownership(current_user.id, game_id, add=True)
-    if success:
-        games_services.modify_wishlist(
-            current_user.id, game_id, remove=True
-        )  # Remove from wishlist if ownership is claimed
     flash(message, "success" if success else "error")
     return redirect(url_for("games.games_index"))
 

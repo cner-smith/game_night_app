@@ -59,7 +59,7 @@ def start_game_night(date_str, notes, attendees_ids):
 
     game_night = GameNight(date=date, notes=notes)
     db.session.add(game_night)
-    db.session.commit()
+    db.session.flush()  # get game_night.id without committing
 
     manage_attendees(game_night, attendees_ids)
     db.session.commit()
@@ -121,7 +121,9 @@ def manage_game_in_night(
         if not game_night_game_id:
             return False, "Game reference missing."
 
-        game_night_game = GameNightGame.query.get(game_night_game_id)
+        game_night_game = GameNightGame.query.filter_by(
+            id=game_night_game_id, game_night_id=game_night_id
+        ).first()
         if not game_night_game:
             return False, "Game not found in this game night."
         db.session.delete(game_night_game)
@@ -181,8 +183,6 @@ def toggle_game_night_field(game_night_id, field):
 
     if field == "final" and getattr(game_night, field) is False:
         # Clear night-triggered badges so re-finalization starts clean
-        from app.models import PersonBadge
-
         PersonBadge.query.filter_by(game_night_id=game_night_id).delete()
 
     db.session.commit()

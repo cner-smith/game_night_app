@@ -97,7 +97,7 @@ class OwnedBy(db.Model):
 
 
 class GameRatings(db.Model):
-    __tablename__ = "game_Ratings"
+    __tablename__ = "game_ratings"
     id = db.Column(db.Integer, primary_key=True)
     game_id = db.Column(db.Integer, ForeignKey("games.id"), nullable=False)
     person_id = db.Column(db.Integer, ForeignKey("people.id"), nullable=False)

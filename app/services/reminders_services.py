@@ -3,20 +3,23 @@ from datetime import datetime
 
 import pytz
 from apscheduler.triggers.cron import CronTrigger
-from flask import render_template
+from flask import current_app, render_template
 from sqlalchemy import func
 
 from app.extensions import scheduler
 from app.models import Game, GameNight, GameNominations, GameVotes, Person, Player, db
 from app.utils import send_email
 
-# Define timezone globally
-central = pytz.timezone("America/Chicago")
+
+def _get_timezone():
+    tz_name = current_app.config.get("APP_TIMEZONE", "America/Chicago")
+    return pytz.timezone(tz_name)
 
 
 def check_and_send_reminders():
     """Checks for upcoming game nights and sends reminder emails to participants."""
-    today_central = datetime.now(central).date()
+    tz = _get_timezone()
+    today_central = datetime.now(tz).date()
 
     game_nights = GameNight.query.filter_by(date=today_central).all()
     if not game_nights:
@@ -89,7 +92,10 @@ def check_and_send_reminders():
 
 def start_scheduler(app):
     """Start the background scheduler for reminders."""
-    scheduler.configure(timezone=central)
+    with app.app_context():
+        tz = pytz.timezone(app.config.get("APP_TIMEZONE", "America/Chicago"))
+
+    scheduler.configure(timezone=tz)
 
     def job_with_app_context():
         with app.app_context():
@@ -97,7 +103,7 @@ def start_scheduler(app):
 
     scheduler.add_job(
         func=job_with_app_context,
-        trigger=CronTrigger(hour=8, minute=45, timezone=central),
+        trigger=CronTrigger(hour=8, minute=45, timezone=tz),
         id="daily_game_night_reminder",
         replace_existing=True,
     )
