@@ -4,8 +4,11 @@ from sqlalchemy.orm import selectinload
 
 from app.services.poll_services import (
     create_poll,
+    get_detailed_results,
     get_poll_by_token,
     get_results,
+    get_user_responses,
+    has_responded,
     poll_is_active,
     submit_response,
     update_poll,
@@ -56,6 +59,18 @@ def poll_list():
 
     polls = Poll.query.order_by(Poll.created_at.desc()).all()
     return render_template("poll_list.html", polls=polls)
+
+
+@polls_bp.route("/polls/<int:poll_id>/results")
+@login_required
+@admin_required
+def poll_results(poll_id: int):
+    from app.models import Poll
+
+    poll = Poll.query.get_or_404(poll_id)
+    results = get_detailed_results(poll)
+    total = sum(r["count"] for r in results)
+    return render_template("poll_results_detail.html", poll=poll, results=results, total=total)
 
 
 @polls_bp.route("/polls/create", methods=["GET", "POST"])
@@ -251,7 +266,22 @@ def poll_page(token: str):
     if poll is None:
         abort(404)
 
-    already_responded = session.get(f"poll_{token}_responded", False)
+    # DB check for logged-in users; session fallback for anonymous
+    if current_user.is_authenticated:
+        already_responded = has_responded(poll, current_user.id, None)
+    else:
+        already_responded = session.get(f"poll_{token}_responded", False)
+
+    # Multi-select polls always show the form so users can change their vote
+    if poll.multi_select:
+        already_responded = False
+
+    user_votes: set[int] = set()
+    if current_user.is_authenticated:
+        user_votes = get_user_responses(poll, current_user.id)
+    elif session.get(f"poll_{token}_votes"):
+        user_votes = set(session.get(f"poll_{token}_votes", []))
+
     results = get_results(poll) if already_responded or not poll_is_active(poll) else None
 
     return render_template(
@@ -260,6 +290,7 @@ def poll_page(token: str):
         active=poll_is_active(poll),
         already_responded=already_responded,
         results=results,
+        user_votes=user_votes,
     )
 
 
@@ -282,6 +313,7 @@ def poll_submit(token: str):
             message="Invalid submission.",
             results=None,
             poll=poll,
+            user_votes=set(),
         )
 
     if not option_ids:
@@ -291,6 +323,7 @@ def poll_submit(token: str):
             message="Please select at least one option.",
             results=None,
             poll=poll,
+            user_votes=set(),
         )
 
     if person_id is None and not respondent_name:
@@ -300,14 +333,24 @@ def poll_submit(token: str):
             message="Please enter your name.",
             results=None,
             poll=poll,
+            user_votes=set(),
         )
 
     success, message = submit_response(poll, option_ids, person_id, respondent_name)
 
+    user_votes: set[int] = set()
     if success:
         session[f"poll_{token}_responded"] = True
+        user_votes = set(option_ids)
+        if person_id is None:
+            session[f"poll_{token}_votes"] = option_ids
 
     results = get_results(poll)
     return render_template(
-        "_poll_thanks.html", success=success, message=message, results=results, poll=poll
+        "_poll_thanks.html",
+        success=success,
+        message=message,
+        results=results,
+        poll=poll,
+        user_votes=user_votes,
     )

@@ -1,4 +1,5 @@
 import datetime as dt
+from collections import OrderedDict
 from datetime import datetime
 
 from sqlalchemy import case, distinct, func
@@ -355,6 +356,51 @@ def get_group_wishlist(user_id):
         }
         for game, wl_count, vote_count in rows
     ]
+
+
+def get_group_collection() -> list[dict]:
+    """Return all games that have at least one owner, with owner names.
+
+    Single query joins Game -> OwnedBy -> Person and aggregates owner info
+    in Python to avoid N+1 queries.
+    """
+    rows = (
+        db.session.query(Game, Person)
+        .join(OwnedBy, Game.id == OwnedBy.game_id)
+        .join(Person, Person.id == OwnedBy.person_id)
+        .order_by(Game.name, Person.first_name)
+        .all()
+    )
+
+    games: OrderedDict[int, dict] = OrderedDict()
+    for game, person in rows:
+        if game.id not in games:
+            games[game.id] = {
+                "game": game,
+                "owners": [],
+                "owner_ids": set(),
+            }
+        games[game.id]["owners"].append(f"{person.first_name} {person.last_name}")
+        games[game.id]["owner_ids"].add(person.id)
+
+    return [
+        {
+            "game": entry["game"],
+            "owner_names": ", ".join(entry["owners"]),
+            "owner_ids": entry["owner_ids"],
+        }
+        for entry in games.values()
+    ]
+
+
+def get_my_collection(person_id: int) -> list[Game]:
+    """Return games owned by a specific person, ordered by name."""
+    return (
+        Game.query.join(OwnedBy, Game.id == OwnedBy.game_id)
+        .filter(OwnedBy.person_id == person_id)
+        .order_by(Game.name)
+        .all()
+    )
 
 
 def toggle_wishlist_vote(user_id, game_id):

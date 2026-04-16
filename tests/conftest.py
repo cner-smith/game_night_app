@@ -75,11 +75,19 @@ def client(app, db):
 def auth_client(app, db):
     """Test client pre-logged-in as a standard user."""
     from app.extensions import bcrypt
-    from app.models import Person
+    from app.models import Person, PollResponse
 
-    _db.session.rollback()
-    Person.query.filter_by(email="test@example.com").delete()
-    _db.session.commit()
+    def _cleanup():
+        _db.session.rollback()
+        existing = Person.query.filter_by(email="test@example.com").first()
+        if existing:
+            # Bulk .delete() bypasses FK cascades; remove dependent rows first.
+            PollResponse.query.filter_by(person_id=existing.id).delete()
+            _db.session.flush()
+            _db.session.delete(existing)
+            _db.session.commit()
+
+    _cleanup()
 
     user = Person(
         first_name="Test",
@@ -96,9 +104,7 @@ def auth_client(app, db):
         client.post("/login", data={"email": "test@example.com", "password": "password"})
         yield client
 
-    _db.session.rollback()
-    Person.query.filter_by(email="test@example.com").delete()
-    _db.session.commit()
+    _cleanup()
 
 
 @pytest.fixture()

@@ -1,5 +1,8 @@
 from datetime import datetime
 
+from sqlalchemy import func
+from sqlalchemy.orm import joinedload
+
 from app.extensions import db
 from app.models import Poll, PollInvitee, PollOption, PollResponse
 
@@ -161,10 +164,54 @@ def submit_response(
 
 def get_results(poll: Poll) -> list[dict]:
     """Return response counts per option, sorted by display_order."""
+    # Single GROUP BY query fetches all counts at once
+    count_rows = (
+        db.session.query(
+            PollResponse.option_id,
+            func.count(PollResponse.id).label("count"),
+        )
+        .filter(PollResponse.poll_id == poll.id)
+        .group_by(PollResponse.option_id)
+        .all()
+    )
+    counts = {row.option_id: row.count for row in count_rows}
+
+    return [
+        {"option_id": option.id, "label": option.label, "count": counts.get(option.id, 0)}
+        for option in poll.options  # type: ignore[attr-defined]
+    ]
+
+
+def get_user_responses(poll: Poll, person_id: int) -> set[int]:
+    """Return the set of option IDs a logged-in user voted for."""
+    responses = PollResponse.query.filter_by(poll_id=poll.id, person_id=person_id).all()
+    return {r.option_id for r in responses}
+
+
+def get_detailed_results(poll: Poll) -> list[dict]:
+    """Return response counts per option with voter details."""
     results = []
     for option in poll.options:  # type: ignore[attr-defined]
-        count = PollResponse.query.filter_by(poll_id=poll.id, option_id=option.id).count()
-        results.append({"option_id": option.id, "label": option.label, "count": count})
+        responses = (
+            PollResponse.query.options(joinedload(PollResponse.person))  # type: ignore[arg-type]
+            .filter_by(poll_id=poll.id, option_id=option.id)
+            .all()
+        )
+        voters = []
+        for r in responses:
+            if r.person_id and r.person:
+                name = f"{r.person.first_name} {r.person.last_name}"
+            else:
+                name = r.respondent_name or "Anonymous"
+            voters.append({"name": name, "person_id": r.person_id})
+        results.append(
+            {
+                "option_id": option.id,
+                "label": option.label,
+                "count": len(responses),
+                "voters": voters,
+            }
+        )
     return results
 
 
