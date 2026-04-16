@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from sqlalchemy.orm import joinedload
+
 from app.extensions import db
 from app.models import Poll, PollInvitee, PollOption, PollResponse
 
@@ -172,7 +174,11 @@ def get_detailed_results(poll: Poll) -> list[dict]:
     """Return response counts per option with voter details."""
     results = []
     for option in poll.options:  # type: ignore[attr-defined]
-        responses = PollResponse.query.filter_by(poll_id=poll.id, option_id=option.id).all()
+        responses = (
+            PollResponse.query.options(joinedload(PollResponse.person))
+            .filter_by(poll_id=poll.id, option_id=option.id)
+            .all()
+        )
         voters = []
         for r in responses:
             if r.person_id and r.person:
