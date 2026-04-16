@@ -16,11 +16,14 @@ def collection_user(app, db):
     )
     _db.session.add(person)
     _db.session.commit()
-    yield person
-    # Teardown: delete ownership rows first, then person
-    OwnedBy.query.filter_by(person_id=person.id).delete()
-    _db.session.delete(person)
-    _db.session.commit()
+    try:
+        yield person
+    finally:
+        # Rollback any aborted state from the test body before cleanup
+        _db.session.rollback()
+        OwnedBy.query.filter_by(person_id=person.id).delete()
+        _db.session.delete(person)
+        _db.session.commit()
 
 
 @pytest.fixture()
@@ -30,11 +33,13 @@ def collection_game(app, db, collection_user):
     _db.session.flush()
     _db.session.add(OwnedBy(game_id=game.id, person_id=collection_user.id))
     _db.session.commit()
-    yield game
-    # Teardown: delete ownership rows, then game
-    OwnedBy.query.filter_by(game_id=game.id).delete()
-    _db.session.delete(game)
-    _db.session.commit()
+    try:
+        yield game
+    finally:
+        _db.session.rollback()
+        OwnedBy.query.filter_by(game_id=game.id).delete()
+        _db.session.delete(game)
+        _db.session.commit()
 
 
 def test_get_group_collection_returns_owned_games(app, db, collection_game, collection_user):
