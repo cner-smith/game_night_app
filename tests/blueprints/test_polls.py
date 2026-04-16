@@ -199,7 +199,7 @@ def test_logged_in_user_sees_already_responded_without_session(auth_client, app,
     assert resp.status_code == 200
     # Vote form should NOT be present — user already voted
     assert b'name="option_ids"' not in resp.data
-    assert b"already responded" in resp.data.lower() or b"Results" in resp.data
+    assert b"already responded" in resp.data.lower()
 
 
 def test_multi_select_allows_revote(auth_client, app, db, poll_author):
@@ -246,3 +246,17 @@ def test_anonymous_vote_stored_in_session(client, open_poll):
     resp = client.get(f"/poll/{open_poll.token}")
     assert resp.status_code == 200
     assert b"your-vote" in resp.data
+
+
+def test_poll_thanks_does_not_render_results_on_failure(client, open_poll):
+    """Failure paths pass results=None; template must not attempt to render _poll_results.html."""
+    # Submit with no option selected — triggers failure path
+    resp = client.post(
+        f"/poll/{open_poll.token}/respond",
+        data={"respondent_name": "Ella"},
+    )
+    assert resp.status_code == 200
+    # The results partial would include this class on every vote row
+    assert b"your-vote" not in resp.data
+    # Error message should be present
+    assert b"at least one option" in resp.data.lower() or b"error" in resp.data.lower()

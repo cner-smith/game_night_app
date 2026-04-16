@@ -7,7 +7,12 @@
 
 <div class="flex items-start justify-between mb-6">
   <div>
-    <h1 class="text-2xl font-bold text-stone-800">{{ poll.title }}</h1>
+    <div class="flex items-center gap-2">
+      <h1 class="text-2xl font-bold text-stone-800">{{ poll.title }}</h1>
+      {% if poll.private %}
+      <span class="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700">Private</span>
+      {% endif %}
+    </div>
     {% if poll.description %}
     <p class="text-sm text-stone-500 mt-1">{{ poll.description }}</p>
     {% endif %}
