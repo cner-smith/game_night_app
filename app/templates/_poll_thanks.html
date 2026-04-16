@@ -5,7 +5,8 @@
   <a href="{{ url_for('main.index') }}" class="mt-2 inline-block text-sm text-green-700 hover:text-green-900 underline">&larr; Back to Game Night</a>
   {% endif %}
 </div>
-{% include "_poll_results.html" %}
+{# results is None on failure paths — do not move this include outside the if block #}
+{% if results %}{% include "_poll_results.html" %}{% endif %}
 {% else %}
 <div class="bg-red-50 rounded-xl border border-red-200 p-6 text-center">
   <p class="text-red-800">{{ message }}</p>

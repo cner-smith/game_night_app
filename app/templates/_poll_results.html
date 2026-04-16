@@ -3,9 +3,12 @@
   <div class="space-y-2">
     {% set total = results | sum(attribute='count') %}
     {% for row in results | sort(attribute='count', reverse=true) %}
-    <div>
+    {% set voted = user_votes is defined and row.option_id in user_votes %}
+    <div class="{{ 'your-vote border-l-4 border-red-500 pl-3' if voted else '' }}">
       <div class="flex justify-between text-sm mb-0.5">
-        <span class="text-stone-700">{{ row.label }}</span>
+        <span class="text-stone-700{{ ' font-semibold' if voted else '' }}">
+          {{ row.label }}{% if voted %} <span class="text-red-600 text-xs ml-1">&#10003; Your vote</span>{% endif %}
+        </span>
         <span class="text-stone-500 font-medium">{{ row.count }}</span>
       </div>
       <div class="h-2 bg-stone-100 rounded-full overflow-hidden">

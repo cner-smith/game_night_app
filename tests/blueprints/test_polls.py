@@ -214,3 +214,28 @@ def test_multi_select_allows_revote(auth_client, app, db, poll_author):
     assert resp.status_code == 200
     # Form should still be present for multi-select polls
     assert b'name="option_ids"' in resp.data
+
+
+def test_logged_in_user_sees_own_vote_highlighted(auth_client, app, db, open_poll):
+    """After voting, logged-in user sees their choice marked."""
+    from app.models import Person
+
+    user = Person.query.filter_by(email="test@example.com").first()
+    option = open_poll.options[0]
+    submit_response(open_poll, [option.id], user.id, None)
+
+    resp = auth_client.get(f"/poll/{open_poll.token}")
+    assert resp.status_code == 200
+    # The voted option should have the "your-vote" marker
+    assert b"your-vote" in resp.data
+
+
+def test_anonymous_vote_stored_in_session(client, open_poll):
+    """Anonymous user's vote is stored in session for highlighting."""
+    option_id = open_poll.options[0].id
+    client.post(
+        f"/poll/{open_poll.token}/respond",
+        data={"option_ids": str(option_id), "respondent_name": "Dana"},
+    )
+    with client.session_transaction() as sess:
+        assert sess.get(f"poll_{open_poll.token}_votes") == [option_id]

@@ -313,6 +313,7 @@ def poll_submit(token: str):
             message="Invalid submission.",
             results=None,
             poll=poll,
+            user_votes=set(),
         )
 
     if not option_ids:
@@ -322,6 +323,7 @@ def poll_submit(token: str):
             message="Please select at least one option.",
             results=None,
             poll=poll,
+            user_votes=set(),
         )
 
     if person_id is None and not respondent_name:
@@ -331,14 +333,24 @@ def poll_submit(token: str):
             message="Please enter your name.",
             results=None,
             poll=poll,
+            user_votes=set(),
         )
 
     success, message = submit_response(poll, option_ids, person_id, respondent_name)
 
+    user_votes: set[int] = set()
     if success:
         session[f"poll_{token}_responded"] = True
+        user_votes = set(option_ids)
+        if person_id is None:
+            session[f"poll_{token}_votes"] = option_ids
 
     results = get_results(poll)
     return render_template(
-        "_poll_thanks.html", success=success, message=message, results=results, poll=poll
+        "_poll_thanks.html",
+        success=success,
+        message=message,
+        results=results,
+        poll=poll,
+        user_votes=user_votes,
     )
