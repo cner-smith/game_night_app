@@ -6,7 +6,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.models import Game
+from app.models import Game, OwnedBy
 from app.services import badge_services, games_services, index_services
 from app.services.bgg_service import BGGService
 from app.utils import admin_required
@@ -86,7 +86,7 @@ def view_game(game_id):
 def claim_game(game_id):
     success, message = games_services.modify_ownership(current_user.id, game_id, add=True)
     flash(message, "success" if success else "error")
-    return redirect(url_for("games.games_index"))
+    return redirect(request.referrer or url_for("games.games_index"))
 
 
 @games_bp.route("/game/<int:game_id>/remove_ownership", methods=["POST"])
@@ -94,7 +94,22 @@ def claim_game(game_id):
 def remove_ownership(game_id):
     success, message = games_services.modify_ownership(current_user.id, game_id, add=False)
     flash(message, "success" if success else "error")
-    return redirect(url_for("games.games_index"))
+    return redirect(request.referrer or url_for("games.games_index"))
+
+
+@games_bp.route("/collection", methods=["GET"])
+@login_required
+def collection():
+    items = games_services.get_group_collection()
+    user_owned = {o.game_id for o in OwnedBy.query.filter_by(person_id=current_user.id).all()}
+    return render_template("collection.html", items=items, user_owned=user_owned)
+
+
+@games_bp.route("/collection/mine", methods=["GET"])
+@login_required
+def my_collection():
+    games = games_services.get_my_collection(current_user.id)
+    return render_template("my_collection.html", games=games)
 
 
 @games_bp.route("/wishlist", methods=["GET"])

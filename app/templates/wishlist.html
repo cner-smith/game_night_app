@@ -33,6 +33,7 @@
         <span class="inline-flex items-center rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-500">On your wishlist</span>
       {% else %}
         <form action="{{ url_for('games.vote_wishlist', game_id=game.id) }}" method="POST">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
           {% if item.user_voted %}
             <button class="inline-flex items-center rounded-lg border border-red-300 px-3 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 transition-colors"
                     type="submit">Remove Vote</button>
