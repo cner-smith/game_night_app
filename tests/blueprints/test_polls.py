@@ -179,3 +179,38 @@ def test_admin_results_route_requires_admin(auth_client, open_poll):
     """Non-admin cannot access detailed results."""
     resp = auth_client.get(f"/polls/{open_poll.id}/results")
     assert resp.status_code in (302, 403)
+
+
+def test_logged_in_user_sees_already_responded_without_session(auth_client, app, db, open_poll):
+    """Logged-in user who voted but cleared session still sees 'already responded'."""
+    from app.models import Person
+
+    user = Person.query.filter_by(email="test@example.com").first()
+    option_id = open_poll.options[0].id
+    submit_response(open_poll, [option_id], user.id, None)
+
+    # Clear session to simulate cookie loss
+    with auth_client.session_transaction() as sess:
+        sess.clear()
+    # Re-login (session was cleared)
+    auth_client.post("/login", data={"email": "test@example.com", "password": "password"})
+
+    resp = auth_client.get(f"/poll/{open_poll.token}")
+    assert resp.status_code == 200
+    # Vote form should NOT be present — user already voted
+    assert b'name="option_ids"' not in resp.data
+    assert b"already responded" in resp.data.lower() or b"Results" in resp.data
+
+
+def test_multi_select_allows_revote(auth_client, app, db, poll_author):
+    """Multi-select polls always show the form so users can change their vote."""
+    multi_poll = create_poll("Multi?", None, ["A", "B", "C"], poll_author.id, True)
+    from app.models import Person
+
+    user = Person.query.filter_by(email="test@example.com").first()
+    submit_response(multi_poll, [multi_poll.options[0].id], user.id, None)
+
+    resp = auth_client.get(f"/poll/{multi_poll.token}")
+    assert resp.status_code == 200
+    # Form should still be present for multi-select polls
+    assert b'name="option_ids"' in resp.data

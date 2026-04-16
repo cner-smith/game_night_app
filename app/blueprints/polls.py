@@ -7,6 +7,8 @@ from app.services.poll_services import (
     get_detailed_results,
     get_poll_by_token,
     get_results,
+    get_user_responses,
+    has_responded,
     poll_is_active,
     submit_response,
     update_poll,
@@ -264,7 +266,22 @@ def poll_page(token: str):
     if poll is None:
         abort(404)
 
-    already_responded = session.get(f"poll_{token}_responded", False)
+    # DB check for logged-in users; session fallback for anonymous
+    if current_user.is_authenticated:
+        already_responded = has_responded(poll, current_user.id, None)
+    else:
+        already_responded = session.get(f"poll_{token}_responded", False)
+
+    # Multi-select polls always show the form so users can change their vote
+    if poll.multi_select:
+        already_responded = False
+
+    user_votes: set[int] = set()
+    if current_user.is_authenticated:
+        user_votes = get_user_responses(poll, current_user.id)
+    elif session.get(f"poll_{token}_votes"):
+        user_votes = set(session.get(f"poll_{token}_votes", []))
+
     results = get_results(poll) if already_responded or not poll_is_active(poll) else None
 
     return render_template(
@@ -273,6 +290,7 @@ def poll_page(token: str):
         active=poll_is_active(poll),
         already_responded=already_responded,
         results=results,
+        user_votes=user_votes,
     )
 
 
