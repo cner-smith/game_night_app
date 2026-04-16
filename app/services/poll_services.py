@@ -168,6 +168,29 @@ def get_results(poll: Poll) -> list[dict]:
     return results
 
 
+def get_detailed_results(poll: Poll) -> list[dict]:
+    """Return response counts per option with voter details."""
+    results = []
+    for option in poll.options:  # type: ignore[attr-defined]
+        responses = PollResponse.query.filter_by(poll_id=poll.id, option_id=option.id).all()
+        voters = []
+        for r in responses:
+            if r.person_id and r.person:
+                name = f"{r.person.first_name} {r.person.last_name}"
+            else:
+                name = r.respondent_name or "Anonymous"
+            voters.append({"name": name, "person_id": r.person_id})
+        results.append(
+            {
+                "option_id": option.id,
+                "label": option.label,
+                "count": len(responses),
+                "voters": voters,
+            }
+        )
+    return results
+
+
 def _get_existing_responses(
     poll: Poll,
     person_id: int | None,

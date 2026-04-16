@@ -4,7 +4,7 @@ import pytest
 
 from app.extensions import db as _db
 from app.models import Person, Poll
-from app.services.poll_services import create_poll
+from app.services.poll_services import create_poll, get_detailed_results, submit_response
 
 
 @pytest.fixture()
@@ -118,3 +118,25 @@ def test_submit_response_rejects_missing_name(client, open_poll):
     resp = client.post(f"/poll/{open_poll.token}/respond", data={"option_ids": str(option_id)})
     assert resp.status_code == 200
     assert b"name" in resp.data.lower() or b"error" in resp.data.lower()
+
+
+def test_get_detailed_results_returns_voters(app, db, open_poll, poll_author):
+    """Detailed results include voter names per option."""
+    # Submit as authenticated user
+    submit_response(open_poll, [open_poll.options[0].id], poll_author.id, None)
+    # Submit as anonymous
+    submit_response(open_poll, [open_poll.options[1].id], None, "Alice")
+
+    results = get_detailed_results(open_poll)
+
+    assert len(results) == 2
+    first_label = open_poll.options[0].label
+    second_label = open_poll.options[1].label
+    first_opt = next(r for r in results if r["label"] == first_label)
+    second_opt = next(r for r in results if r["label"] == second_label)
+    assert first_opt["count"] == 1
+    assert first_opt["voters"][0]["name"] == "Poll Author"
+    assert first_opt["voters"][0]["person_id"] == poll_author.id
+    assert second_opt["count"] == 1
+    assert second_opt["voters"][0]["name"] == "Alice"
+    assert second_opt["voters"][0]["person_id"] is None
