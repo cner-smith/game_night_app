@@ -117,3 +117,20 @@ def test_create_date_poll_commits_once_with_its_dates(w, commits):
     w.polls.append(poll.id)
     assert len(commits) == 1
     assert poll.date_poll and [o.option_date for o in poll.options] == days
+
+
+def test_owning_a_wishlisted_game_is_one_commit(w, commits):
+    from app.models import OwnedBy, Wishlist
+    from app.services import games_services
+
+    ann, game = w.person("Ann"), w.game()
+    _db.session.add(Wishlist(person_id=ann.id, game_id=game.id))
+    _db.session.commit()
+    commits.clear()
+
+    ok, _ = games_services.modify_ownership(ann.id, game.id, add=True)
+    assert ok and len(commits) == 1
+    assert OwnedBy.query.filter_by(person_id=ann.id, game_id=game.id).count() == 1
+    assert Wishlist.query.filter_by(person_id=ann.id, game_id=game.id).count() == 0
+    OwnedBy.query.filter_by(person_id=ann.id).delete()
+    _db.session.commit()

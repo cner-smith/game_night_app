@@ -306,8 +306,9 @@ def modify_ownership(person_id, game_id, add=True, *, actor_is_self=True):
 
     if add:
         if not ownership:
+            # Owning it takes it off their wishlist, in the same commit.
             db.session.add(OwnedBy(game_id=game.id, person_id=person_id))
-            modify_wishlist(person_id, game.id, remove=True)
+            Wishlist.query.filter_by(game_id=game.id, person_id=person_id).delete()
             db.session.commit()
             return True, f'{subject} now own "{game.name}".'
         return False, f'{subject} already own "{game.name}".'
