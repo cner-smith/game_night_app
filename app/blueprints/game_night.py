@@ -3,7 +3,16 @@
 from datetime import datetime
 
 import pytz
-from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
+from flask import (
+    Blueprint,
+    current_app,
+    flash,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    url_for,
+)
 from flask_login import current_user, login_required
 
 from app.services import (
@@ -195,11 +204,17 @@ def log_results(game_night_id, game_night_game_id):
         # A refused body gets a 400 from the ServiceError handler ({"error": ...}).
         message = game_night_services.log_results(game_night_id, game_night_game_id, data)
         flash(message, "success")
-        return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
+        # The page posts with fetch; answer with where to go rather than redirecting,
+        # so the flash survives until the browser loads that page.
+        url = url_for("game_night.view_game_night", game_night_id=game_night_id, _anchor="played")
+        return jsonify(redirect=url)
 
     game_night_game, players, existing_results = game_night_services.get_log_results_data(
         game_night_id, game_night_game_id
     )
+    if game_night_game.game_night.final:
+        flash("This game night is finalized. Reopen it to make changes.", "error")
+        return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
     context = {
         "game_night_id": game_night_id,
@@ -253,6 +268,9 @@ def add_game_to_night(game_night_id):
         return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
     game_night = game_night_services.get_game_night_by_id(game_night_id)
+    if game_night.final:
+        flash("This game night is finalized. Reopen it to make changes.", "error")
+        return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
     items, player_count = game_picker_services.picker_items(game_night, current_user.id)
     nominated = sorted(
         (i for i in items if i["nominated_by"]), key=lambda i: (-i["vote_score"], i["game"].name)

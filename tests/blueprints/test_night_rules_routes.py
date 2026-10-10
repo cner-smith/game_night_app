@@ -266,9 +266,9 @@ def test_log_results_saves_scores_and_places(client, w):
             str(pa.id): {"user_id": str(pa.id), "score": None, "position": None},
         },
     )
-    assert resp.status_code == 302
+    assert resp.status_code == 200
     got = {r.player_id: (r.position, r.score) for r in gng.results}
-    assert got == {ph.id: (1, 12), pa.id: (None, None)}
+    assert got == {ph.id: (1, 12)}  # a blank entry means they didn't play this one
 
 
 def test_log_results_refuses_a_player_from_another_night(client, w):

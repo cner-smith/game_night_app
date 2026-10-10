@@ -106,11 +106,13 @@
       body: JSON.stringify(formData)
     })
     .then(async response => {
-      if (response.ok) {
-        window.location.href = response.redirected ? response.url : window.location.href;
+      const json = (response.headers.get("Content-Type") || "").includes("json")
+        ? await response.json() : null;
+      if (response.ok && json && json.redirect) {
+        window.location.href = json.redirect;
         return;
       }
-      showError((await response.text()) || "Couldn't save the results.");
+      showError((json && json.error) || "Couldn't save the results.");
     })
     .catch(() => showError("Couldn't save the results. Check your connection and try again."));
   });

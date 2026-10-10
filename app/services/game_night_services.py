@@ -283,6 +283,9 @@ def _optional_int(value):
     return int(value)
 
 
+_INT_MAX = 2**31 - 1  # results.score and results.position are Postgres integers
+
+
 def _parse_results(game_night, scores_positions):
     """{player_id: (score, position)} from the log-results body, or
     ServiceError. Every player must be at this night."""
@@ -301,6 +304,8 @@ def _parse_results(game_night, scores_positions):
             raise ServiceError("Scores and places must be whole numbers.") from None
         if player_id is None or player_id not in night_player_ids:
             raise ServiceError("Results can only be logged for this night's players.")
+        if any(n is not None and abs(n) > _INT_MAX for n in (score, position)):
+            raise ServiceError("That number is too big to save.")
         parsed[player_id] = (score, position)
     return parsed
 
@@ -315,7 +320,13 @@ def log_results(game_night_id, game_night_game_id, scores_positions):
     parsed = _parse_results(game_night, scores_positions)
 
     for player_id, (score, position) in parsed.items():
-        upsert_result(game_night_game_id, player_id, position, score)
+        if score is None and position is None:
+            # Left blank: they didn't play this one (or the entry was cleared).
+            Result.query.filter_by(
+                game_night_game_id=game_night_game_id, player_id=player_id
+            ).delete()
+        else:
+            upsert_result(game_night_game_id, player_id, position, score)
 
     db.session.commit()
     return "Results logged successfully."
@@ -358,12 +369,14 @@ def toggle_game_night_field(game_night_id, field):
     game_night = db.get_or_404(GameNight, game_night_id)
     setattr(game_night, field, not getattr(game_night, field))
     if game_night.closed:
-        # Closing voting closes the night's linked polls too.
+        # Closing voting closes the night's other linked polls too, but not the RSVP
+        # poll: people can still say whether they're coming until the night is final.
         for poll in game_night.polls:
-            poll.closed = True
+            if not poll.availability:
+                poll.closed = True
 
     db.session.commit()
-    return f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}."
+    return "Voting closed." if game_night.closed else "Voting reopened."
 
 
 def _locked_night(game_night_id):

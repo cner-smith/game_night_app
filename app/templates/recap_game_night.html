@@ -36,9 +36,7 @@
         <span data-share-label>Share</span>
       </button>
     </div>
-    {% if game_night.notes %}
-    <p class="text-stone-600 text-sm mt-1">{{ game_night.notes }}</p>
-    {% endif %}
+    {# Notes stay off the public recap: it needs no login and its URL is just the night's id. #}
   </div>
 
   <!-- Headline -->

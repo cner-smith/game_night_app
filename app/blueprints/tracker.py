@@ -58,7 +58,8 @@ def setup_tracker(gng_id):
     gn = gng.game_night
     _assert_gng_participant_or_admin(gng)
     if gn.final:
-        abort(400, "Cannot start a tracker for a finalized game night.")
+        flash("This game night is finalized, so it can't be tracked.", "error")
+        return redirect(url_for("game_night.view_game_night", game_night_id=gn.id))
     # Redirect away from completed sessions — can't re-track a finished game
     if tracker_services.find_session(gng_id, "completed"):
         return redirect(url_for("game_night.view_game_night", game_night_id=gn.id))
@@ -270,7 +271,7 @@ def save_results(session_id):
         flash(str(e), "error")
         return redirect(url_for("tracker.end_game", session_id=session_id))
     gn_id = session.game_night_game.game_night_id
-    return redirect(url_for("game_night.view_game_night", game_night_id=gn_id))
+    return redirect(url_for("game_night.view_game_night", game_night_id=gn_id, _anchor="played"))
 
 
 @tracker_bp.route("/tracker/<int:session_id>/discard", methods=["POST"])

@@ -160,8 +160,8 @@ def test_toggle_invalid_field_is_rejected(admin_client, app, db):
     _db.session.commit()
 
 
-def test_toggle_closed_auto_closes_availability_poll(admin_client, app, db):
-    """Closing voting on a game night should auto-close its availability poll."""
+def test_availability_poll_stays_open_until_the_night_is_final(admin_client, app, db):
+    """Closing voting leaves the RSVP poll open; finalizing closes it."""
     import datetime
     import uuid
 
@@ -188,7 +188,14 @@ def test_toggle_closed_auto_closes_availability_poll(admin_client, app, db):
     from app.models import Poll
 
     refreshed = _db.session.get(Poll, poll_id)
-    assert refreshed.closed is True, "Availability poll must auto-close when voting closes"
+    assert refreshed.closed is False, "People can still RSVP after voting closes"
+
+    admin_client.post(f"/game_night/{gn_id}/finalize")
+    _db.session.refresh(refreshed)
+    assert refreshed.closed is True, "Finalizing closes the RSVP poll"
+    from app.models import PersonBadge
+
+    PersonBadge.query.filter_by(game_night_id=gn_id).delete()
 
     from app.models import PollOption, PollResponse
 
