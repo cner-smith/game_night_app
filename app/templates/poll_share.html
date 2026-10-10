@@ -40,7 +40,7 @@
       <p class="text-sm text-stone-500">No users with email addresses found.</p>
       {% endif %}
       {% if unclaimed %}
-      <p class="text-xs text-amber-700">{{ unclaimed }} {{ 'person hasn\'t' if unclaimed == 1 else 'people haven\'t' }} signed up yet, so they can't be emailed or answer polls. They can claim their account on the sign-up page with the name an admin added.</p>
+      <p class="text-xs text-amber-700">{{ unclaimed }} {{ 'person hasn\'t' if unclaimed == 1 else 'people haven\'t' }} signed up yet, so they can't be emailed or answer polls. Send them their <a href="{{ url_for('admin.invites') }}" class="underline">invite link</a> so they can sign up.</p>
       {% endif %}
 
       <button type="submit"
