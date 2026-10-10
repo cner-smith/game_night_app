@@ -2,6 +2,7 @@ import hashlib
 from datetime import timedelta
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import bcrypt
 from app.models import AuthThrottle, Person, db
@@ -67,7 +68,10 @@ def login(email, password, ip=None):
     if not email or not password:
         return False, "Enter your email and password.", None
     throttle = _throttle_on()
-    email_key, ip_key = _email_key("login", email), f"login:ip:{ip}" if ip else None
+    # The per-email limit counts per address too, so someone guessing at an
+    # account from one place can't lock its owner out everywhere else.
+    email_key = _email_key("login", f"{email}|{ip or ''}")
+    ip_key = f"login:ip:{ip}" if ip else None
     if throttle and (
         _over_limit(email_key, LOGIN_EMAIL_LIMIT, LOGIN_WINDOW)
         or (ip_key and _over_limit(ip_key, LOGIN_IP_LIMIT, LOGIN_WINDOW))
@@ -75,6 +79,14 @@ def login(email, password, ip=None):
         return False, TOO_MANY_LOGINS, None
     user = Person.query.filter(func.lower(Person.email) == email).first()
     if user and user.password and bcrypt.check_password_hash(user.password, password):
+        if user.temp_pass:
+            # The old temporary-password flow (removed) mailed these out with an
+            # expiry; don't let one sign in now that nothing checks the expiry.
+            return (
+                False,
+                "That was a temporary password. Use Forgot password? to set a new one.",
+                None,
+            )
         return True, "Login successful.", user
     if throttle:
         _record(email_key, ip_key)
@@ -197,9 +209,21 @@ def signup(email, password, invite=None):
             "An account with this email already exists. Sign in, or reset your password.",
         )
 
+    # Two sign-ups racing on one link: lock the person and re-check it's unclaimed.
+    person = Person.query.filter_by(id=person.id).with_for_update().populate_existing().one()
+    if person.email or person.password:
+        db.session.rollback()
+        return False, INVITE_USED
     person.email = email
     person.password = hash_password(password)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:  # the same email signed up a moment ago
+        db.session.rollback()
+        return (
+            False,
+            "An account with this email already exists. Sign in, or reset your password.",
+        )
 
     return True, "You're signed up! You can now log in."
 

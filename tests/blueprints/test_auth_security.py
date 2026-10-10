@@ -198,6 +198,33 @@ def test_login_is_throttled_per_email(client, make_person, throttled):
     assert resp.status_code == 429 and b"Too many sign-in attempts" in resp.data
 
 
+def test_guessing_from_one_address_doesnt_lock_the_owner_out_elsewhere(
+    client, make_person, throttled
+):
+    from app.services import auth_services
+
+    ann = make_person("Ann")
+    attacker = {"REMOTE_ADDR": "203.0.113.9"}
+    for _ in range(auth_services.LOGIN_EMAIL_LIMIT + 2):
+        client.post("/login", data={"email": ann.email, "password": "wrong"}, environ_base=attacker)
+    resp = client.post(
+        "/login",
+        data={"email": ann.email, "password": "password"},
+        environ_base={"REMOTE_ADDR": "198.51.100.7"},
+    )
+    assert resp.status_code == 302
+
+
+def test_an_old_temporary_password_no_longer_signs_in(client, make_person):
+    from app.extensions import db as _db
+
+    ann = make_person("Ann")
+    ann.temp_pass = True
+    _db.session.commit()
+    resp = client.post("/login", data={"email": ann.email, "password": "password"})
+    assert resp.status_code == 200 and b"temporary password" in resp.data
+
+
 def test_login_is_throttled_per_address(client, make_person, throttled, monkeypatch):
     from app.services import auth_services
 

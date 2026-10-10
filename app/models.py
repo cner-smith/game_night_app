@@ -157,6 +157,10 @@ class AuthThrottle(db.Model):
     reset-email floods. Rows older than a day are cleared as new ones arrive."""
 
     __tablename__ = "auth_throttle"
+    __table_args__ = (
+        db.Index("ix_auth_throttle_key_created_at", "key", "created_at"),
+        db.Index("ix_auth_throttle_created_at", "created_at"),
+    )
     id = db.Column(db.Integer, primary_key=True)
     key = db.Column(db.String(100), nullable=False)
     created_at = db.Column(db.DateTime, server_default=func.now(), nullable=False)

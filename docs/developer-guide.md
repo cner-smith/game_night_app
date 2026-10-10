@@ -14,7 +14,7 @@ This is a fork of [game_night_app](https://github.com/Gammill32/game_night_app).
 - **Flask-Migrate (Alembic)** added for database schema management — all schema changes now go through versioned migrations in `migrations/versions/`
 - **GitHub Actions CI** runs on every push/PR: lint → type check → security scan → pytest → Docker build → image publish to GHCR
 - **Dockerfile** upgraded from Python 3.10 → 3.11; entrypoint runs `flask db upgrade` automatically before starting gunicorn
-- **Tailwind CSS** (CDN) replaces custom CSS; **HTMX** (CDN) added for async page fragments
+- **Tailwind CSS** replaces custom CSS (built with the pinned standalone CLI, `scripts/build_css.sh`; started on the CDN); **HTMX** (CDN) added for async page fragments
 - **pytest** infrastructure with PostgreSQL-backed integration tests (see [Testing](#testing))
 
 ### Features Added
@@ -280,7 +280,7 @@ The app uses 5 PostgreSQL views for performance (e.g., `GameNightRankings`, `Gam
 
 ## User Management
 
-People are added by name first (so they can be put on nights before they have an account), then claim that person with a personal **invite link**. Anyone can also sign up from `/signup` without a link, but that always creates a *new* person: typing a name never attaches to someone already on the site (a name clash gets a friendly "ask for your invite link" message instead).
+People are added by name first (so they can be put on nights before they have an account), then claim that person with a personal **invite link**. Sign-up is invite-only: `/signup` without a link only explains how to get one, and typing a name never attaches to someone already on the site.
 
 ### Adding a New User
 
@@ -289,15 +289,17 @@ People are added by name first (so they can be put on nights before they have an
 3. On the Admin page, their row says *Not signed up yet* with **Copy invite link**
 4. Send them the link; it opens sign-up prefilled as that person and they add an email and password
 
-Invite links are signed with `SECRET_KEY` (`itsdangerous`, salt `person-invite`), last 14 days, and stop working once the person has signed up or has been deactivated (the link includes a digest of `people.session_token`, which deactivation changes). Whatever rights an admin gave the person (admin, Can host) carry over when they claim it.
+Invite links are signed with `SECRET_KEY` (`itsdangerous`, salt `person-invite`), last 14 days, and stop working once the person has signed up or has been deactivated (the link includes a digest of `people.session_token`, which deactivation changes). A link also names who made it and stops working if they could no longer make it: they lost admin or hosting, or an admin has since given the person rights. Whatever rights an admin gave the person (admin, Can host) carry over when they claim it.
 
-Hosts can also add someone by name from the start/edit night form (**Not on the site? Add them**, `POST /people/quick_add`). Hosts get invite links for unclaimed guests on nights they host from **Profile → Invite people** (`/invites`), but not for anyone an admin has given rights to.
+Hosts can also add someone by name from the start/edit night form (**Not on the site? Add them**, `POST /people/quick_add`). Hosts get invite links from **Profile → Invite people** (`/invites`) for their own guests: unclaimed people who have only ever played on nights that host ran, and whom no admin has given rights to.
 
 ### Sign-in security
 
 - One password rule everywhere (`auth_services.password_problem`): 8+ characters, at most 72 bytes (bcrypt's limit).
 - `Person.get_id()` returns `"<id>:<session_token>"` (Flask-Login's alternative token). Changing or resetting a password, or deactivating someone, sets a new token, which logs out their other sessions; the session that changed the password is logged back in.
-- Failed sign-ins (per email and per client address) and reset requests are counted in `auth_throttle`, so the limits hold across workers. Tests turn this off with `AUTH_THROTTLE = False`.
+- Failed sign-ins (per email *from* an address, and per address) and reset requests are counted in `auth_throttle`, so the limits hold across workers and threads. Keying the email limit by address too means guessing at an account from one place can't lock its owner out elsewhere. Tests turn this off with `AUTH_THROTTLE = False`.
+- The client address comes from `ProxyFix` (one trusted proxy: Traefik). If the domain is ever put behind Cloudflare or another proxy, every visitor would share that proxy's address and the per-address limit; trust its client-IP header only from its published ranges.
+- Accounts still flagged `temp_pass` (from the original app's mailed temporary passwords) can't sign in with that password; they use Forgot password.
 
 **Removing** someone who has played deactivates them (`people.active = false`) so their results and stats stay; people with no history are deleted.
 
@@ -413,6 +415,19 @@ sudo docker compose up -d
 
 The entrypoint automatically runs `flask db upgrade` before starting gunicorn, so migrations apply on deploy without manual intervention.
 
+### Before the first deploy of the October 2026 changes
+
+Run these against production first (read-only):
+
+```sql
+-- people on a night twice: migration u8c2 merges them (see its docstring)
+SELECT game_night_id, people_id, count(*) FROM players GROUP BY 1, 2 HAVING count(*) > 1;
+-- old temporary passwords still set
+SELECT count(*) FROM people WHERE temp_pass;
+```
+
+and `\d players`, `\d wishlist`, `\d ownedby`, `\d game_nominations` in psql: if the brownfield database has its own unique indexes on those tables under other names, drop them in a migration so double-submits are recognised by the constraint names in `app/services/db_utils.py`. After deploying, `flask badges recheck --dry-run`.
+
 ### Containers: web and scheduler
 
 `docker-compose.yml` runs two containers from the same image:
@@ -467,6 +482,6 @@ A failed lint or test blocks the merge. The 60% coverage gate is a minimum floor
   - Still `(ok, message[, obj])` tuples: `admin_services`, `auth_services` (login/signup/reset carry status like "too many attempts"), `games_services`, `poll_services.submit_response` and `date_poll_services.submit_answers` (they re-render the poll widget with the message either way), `date_poll_services.pick_date`, and `game_night_services.finalize`/`unfinalize` (an "already finalized" outcome, flashed as info, not an error). Convert these the same way when touching them.
 - **One commit per operation:** an operation that writes several things commits once at the end; helpers it calls only `flush()` (e.g. `poll_services.add_poll` / `add_availability_poll` vs `create_poll` / `create_availability_poll`). Deliberate exceptions: `finalize` commits before awarding badges (a badge failure mustn't undo finalizing), and `get_or_create_game` commits the library row before ownership/wishlist is added (the game belongs in the library either way).
 - **Unique constraints and double-submits:** don't look a row up and then insert it. Use `app/services/db_utils.py`: `upsert()` (`INSERT ... ON CONFLICT DO UPDATE`, results and votes) or `add_unless_duplicate()` (savepoint; a duplicate means "already done": players, wishlist, ownership, nominations).
-- Templates use Tailwind CSS (CDN) and HTMX for async fragments
+- Templates use Tailwind CSS (built: run `scripts/build_css.sh` after using a new class and commit `app/static/css/tailwind.css`; CI fails on a stale file) and HTMX for async fragments
 - No docstrings required; add comments only where logic is non-obvious
 - Commits: no AI co-author lines
