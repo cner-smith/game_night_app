@@ -1,29 +1,38 @@
 {% extends "auth_base.html" %}
 {% block title %}Sign Up — Game Night{% endblock %}
 {% block content %}
-<h2 class="text-xl font-bold text-stone-800 mb-6">Create account</h2>
+<h2 class="text-xl font-bold text-stone-800 mb-2">Create account</h2>
+{% if invitee %}
+<p class="mb-6 text-sm text-stone-600">You've been invited as <strong>{{ invitee.full_name }}</strong>. Add your email and a password to finish.</p>
+{% else %}
+<p class="mb-6 text-sm text-stone-600">Already on a game night here? Ask an admin or your host for your invite link so your past games stay with you.</p>
+{% endif %}
 <form method="POST" class="space-y-4">
+  {% if invite %}<input type="hidden" name="invite" value="{{ invite }}">{% endif %}
   <div class="grid grid-cols-2 gap-3">
     <div>
       <label for="first_name" class="block text-sm font-medium text-stone-700 mb-1">First name</label>
-      <input type="text" id="first_name" name="first_name" required
-             class="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent" />
+      <input type="text" id="first_name" name="first_name" required autocomplete="given-name"
+             value="{{ invitee.first_name if invitee else form.get('first_name', '') }}"{% if invitee %} readonly{% endif %}
+             class="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent{% if invitee %} bg-stone-50 text-stone-600{% endif %}" />
     </div>
     <div>
       <label for="last_name" class="block text-sm font-medium text-stone-700 mb-1">Last name</label>
-      <input type="text" id="last_name" name="last_name" required
-             class="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent" />
+      <input type="text" id="last_name" name="last_name" required autocomplete="family-name"
+             value="{{ invitee.last_name if invitee else form.get('last_name', '') }}"{% if invitee %} readonly{% endif %}
+             class="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent{% if invitee %} bg-stone-50 text-stone-600{% endif %}" />
     </div>
   </div>
   <div>
     <label for="email" class="block text-sm font-medium text-stone-700 mb-1">Email</label>
-    <input type="email" id="email" name="email" required
+    <input type="email" id="email" name="email" required autocomplete="email" value="{{ form.get('email', '') }}"
            class="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent" />
   </div>
   <div>
     <label for="password" class="block text-sm font-medium text-stone-700 mb-1">Password</label>
-    <input type="password" id="password" name="password" required
+    <input type="password" id="password" name="password" required minlength="8" autocomplete="new-password"
            class="w-full rounded-lg border border-stone-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent" />
+    <p class="text-xs text-stone-500 mt-1">At least 8 characters.</p>
   </div>
   <button type="submit" class="w-full rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 transition-colors">
     Create account
