@@ -68,11 +68,6 @@
                 {{ entry.team.name }}
                 <span class="block text-xs font-normal text-stone-500">{{ entry.team.players | map(attribute='person.first_name') | join(', ') }}</span>
               {% endif %}
-              {% if entry.player_id is not none %}
-              <input type="hidden" name="score_p_{{ entry.player_id }}" value="{{ entry.score }}">
-              {% else %}
-              <input type="hidden" name="score_t_{{ entry.team_id }}" value="{{ entry.score }}">
-              {% endif %}
             </td>
             <td class="px-4 py-3 text-center font-bold text-stone-800">{{ entry.score }}</td>
           </tr>
