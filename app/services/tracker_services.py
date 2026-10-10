@@ -1,7 +1,6 @@
 from app.extensions import db
 from app.models import (  # noqa: F401 — partial imports used by later functions in this module
     Player,
-    Result,
     TrackerField,
     TrackerSession,
     TrackerTeam,
@@ -10,6 +9,7 @@ from app.models import (  # noqa: F401 — partial imports used by later functio
 )
 from app.services import night_policy
 from app.services.errors import ServiceError
+from app.services.game_night_services import upsert_result
 
 GLOBAL_FIELD_TYPES = {"global_counter", "global_notes"}
 PER_PLAYER_FIELD_TYPES = {"counter", "checkbox", "player_notes"}
@@ -272,7 +272,7 @@ def compute_rankings(session_id, low_wins=False):
 
 def save_results(session_id, positions=None):
     """
-    Write the session's results (fetch-or-create upsert, like log_results).
+    Write the session's results (an INSERT ... ON CONFLICT upsert, like log_results).
 
     Scores come from the tracked values, never from the caller. Places start
     from compute_rankings; positions ({("player"|"team", id): place}) lets
@@ -302,24 +302,13 @@ def save_results(session_id, positions=None):
 
     for entry in rankings:
         if entry["player_id"] is not None:
-            _upsert_result(gng_id, entry["player_id"], entry["position"], entry["score"])
+            upsert_result(gng_id, entry["player_id"], entry["position"], entry["score"])
         else:
             for player in entry["team"].players:
-                _upsert_result(gng_id, player.id, entry["position"], entry["score"])
+                upsert_result(gng_id, player.id, entry["position"], entry["score"])
 
     session.status = "completed"
     db.session.commit()
-
-
-def _upsert_result(game_night_game_id, player_id, position, score):
-    result = Result.query.filter_by(
-        game_night_game_id=game_night_game_id, player_id=player_id
-    ).first()
-    if not result:
-        result = Result(game_night_game_id=game_night_game_id, player_id=player_id)
-        db.session.add(result)
-    result.position = position
-    result.score = score
 
 
 def _seed_value(session_id, field, *, player_id, team_id):

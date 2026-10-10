@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.services import food_services, night_policy, poll_services
 from app.services.admin_services import get_all_people
+from app.services.db_utils import add_unless_duplicate, upsert
 from app.services.errors import ServiceError
 
 logger = logging.getLogger(__name__)
@@ -89,7 +90,10 @@ def manage_attendees(game_night, attendees_ids):
 
     current_attendees = {p.people_id for p in game_night.players}
     for person_id in new_attendees - current_attendees:
-        db.session.add(Player(game_night_id=game_night.id, people_id=person_id))
+        # Already there (a double-submitted edit added them first) is fine.
+        add_unless_duplicate(
+            Player(game_night_id=game_night.id, people_id=person_id), "uq_players_night_person"
+        )
 
 
 def _in_a_tracker(player_id):
@@ -311,20 +315,26 @@ def log_results(game_night_id, game_night_game_id, scores_positions):
     parsed = _parse_results(game_night, scores_positions)
 
     for player_id, (score, position) in parsed.items():
-        # Fetch or create a result entry for this player
-        result = Result.query.filter_by(
-            game_night_game_id=game_night_game_id, player_id=player_id
-        ).first()
-        if not result:
-            result = Result(game_night_game_id=game_night_game_id, player_id=player_id)
-            db.session.add(result)
-
-        # Update score and position
-        result.score = score
-        result.position = position
+        upsert_result(game_night_game_id, player_id, position, score)
 
     db.session.commit()
     return "Results logged successfully."
+
+
+def upsert_result(game_night_game_id, player_id, position, score):
+    """Set a player's place and score for a game, creating the row if needed,
+    in one statement (a double-submitted save just writes it twice)."""
+    upsert(
+        Result,
+        {
+            "game_night_game_id": game_night_game_id,
+            "player_id": player_id,
+            "position": position,
+            "score": score,
+        },
+        "uq_results_game_player",
+        ["position", "score"],
+    )
 
 
 def get_log_results_data(game_night_id, game_night_game_id):
