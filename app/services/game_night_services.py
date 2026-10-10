@@ -29,6 +29,7 @@ from app.models import (
 )
 from app.services import food_services, night_policy, poll_services
 from app.services.admin_services import get_all_people
+from app.services.errors import ServiceError
 
 logger = logging.getLogger(__name__)
 
@@ -58,21 +59,25 @@ BAD_PLAYERS_MESSAGE = "Pick players from the list."
 def manage_attendees(game_night, attendees_ids):
     """Sync a game night's players to the given person ids.
 
-    Returns an error message (and changes nothing) if an id isn't a person,
-    or a player being removed already has results logged or is in a tracker;
+    Raises ServiceError (and changes nothing) if an id isn't a person, or a
+    player being removed already has results logged or is in a tracker;
     their nominations and votes go with them."""
     new_attendees = _person_ids(attendees_ids)
     if new_attendees is None:
-        return BAD_PLAYERS_MESSAGE
+        raise ServiceError(BAD_PLAYERS_MESSAGE)
     removing = [p for p in game_night.players if p.people_id not in new_attendees]
     with_results = [p for p in removing if p.results]
     if with_results:
         names = ", ".join(p.person.first_name for p in with_results)
-        return f"{names} already {'has' if len(with_results) == 1 else 'have'} results logged for this night; remove those results before removing them."
+        raise ServiceError(
+            f"{names} already {'has' if len(with_results) == 1 else 'have'} results logged for this night; remove those results before removing them."
+        )
     tracked = [p for p in removing if _in_a_tracker(p.id)]
     if tracked:
         names = ", ".join(p.person.first_name for p in tracked)
-        return f"{names} {'is' if len(tracked) == 1 else 'are'} in a game tracker for this night; finish or discard that tracker before removing them."
+        raise ServiceError(
+            f"{names} {'is' if len(tracked) == 1 else 'are'} in a game tracker for this night; finish or discard that tracker before removing them."
+        )
 
     for player in removing:
         # Their nomination goes with them, so nobody's votes for it count any more.
@@ -85,7 +90,6 @@ def manage_attendees(game_night, attendees_ids):
     current_attendees = {p.people_id for p in game_night.players}
     for person_id in new_attendees - current_attendees:
         db.session.add(Player(game_night_id=game_night.id, people_id=person_id))
-    return None
 
 
 def _in_a_tracker(player_id):
@@ -104,23 +108,24 @@ def _in_a_tracker(player_id):
 def start_game_night(
     date_str, notes, attendees_ids, food=("none", None, None), host_id=None, address=None
 ):
-    """Create a new game night and add attendees. Returns (success, message, game_night)."""
+    """Create a new game night and add attendees. Returns the night;
+    raises ServiceError (saving nothing) on a bad date or attendee list."""
     date = parse_date(date_str)
     if not date:
-        return False, "Invalid date format. Please use YYYY-MM-DD.", None
+        raise ServiceError("Invalid date format. Please use YYYY-MM-DD.")
 
     game_night = GameNight(date=date, notes=notes, host_id=host_id, address=clean_address(address))
     food_services.apply_food_settings(game_night, *food)
     db.session.add(game_night)
     db.session.flush()  # get game_night.id without committing
 
-    error = manage_attendees(game_night, attendees_ids)
-    if error:
+    try:
+        manage_attendees(game_night, attendees_ids)
+    except ServiceError:
         db.session.rollback()
-        return False, error, None
+        raise
     db.session.commit()
-
-    return True, "Game night started.", game_night
+    return game_night
 
 
 def get_game_night_details(game_night_id):
@@ -137,21 +142,22 @@ def get_game_night_details(game_night_id):
 def edit_game_night(
     game_night_id, date_str, notes, attendees_ids, food=None, host_id=None, address=None
 ):
-    """Edit an existing game night. host_id (admins only) changes the host."""
+    """Edit an existing game night. host_id (admins only) changes the host.
+    Returns the message to show; raises ServiceError (saving nothing)."""
     game_night = db.get_or_404(GameNight, game_night_id)
 
     date = parse_date(date_str)
     if not date:
-        return False, "Invalid date format. Please use YYYY-MM-DD."
+        raise ServiceError("Invalid date format. Please use YYYY-MM-DD.")
     attendee_ids = _person_ids(attendees_ids)
     if attendee_ids is None:
-        return False, BAD_PLAYERS_MESSAGE
+        raise ServiceError(BAD_PLAYERS_MESSAGE)
     if host_id and db.session.get(Person, host_id) is None:
-        return False, "Pick a host from the list."
+        raise ServiceError("Pick a host from the list.")
     if not night_policy.is_editable(game_night) and (
         date != game_night.date or attendee_ids != {p.people_id for p in game_night.players}
     ):
-        return False, night_policy.FINAL_MESSAGE + " (Its date and players are locked.)"
+        raise ServiceError(night_policy.FINAL_MESSAGE + " (Its date and players are locked.)")
 
     game_night.date = date
     game_night.notes = notes
@@ -163,13 +169,14 @@ def edit_game_night(
         food_services.apply_food_settings(game_night, *food)
     if host_id is not None:
         game_night.host_id = host_id or None
-    error = manage_attendees(game_night, attendee_ids)
-    if error:
+    try:
+        manage_attendees(game_night, attendee_ids)
+    except ServiceError:
         db.session.rollback()
-        return False, error
+        raise
 
     db.session.commit()
-    return True, "Game night updated successfully."
+    return "Game night updated successfully."
 
 
 def clean_address(raw):
@@ -192,10 +199,10 @@ def clear_past_addresses(today):
 def delete_game_night(game_night_id):
     game_night = db.session.get(GameNight, game_night_id)
     if not game_night:
-        return False, "Game night not found."
+        raise ServiceError("Game night not found.", status=404)
 
     if game_night.final:
-        return False, "You cannot delete a finalized game night."
+        raise ServiceError("You cannot delete a finalized game night.")
 
     from app.services import media_services, photo_services
 
@@ -210,28 +217,26 @@ def delete_game_night(game_night_id):
     db.session.delete(game_night)
     db.session.commit()
     media_services.delete(*files)
-    return True, "Game night deleted successfully."
+    return "Game night deleted successfully."
 
 
 def manage_game_in_night(
     game_night_id, game_id, action="add", round_number=None, game_night_game_id=None
 ):
-    """Add or remove a game from a game night."""
+    """Add or remove a game from a game night. Returns the message to show;
+    raises ServiceError."""
     game_night = db.get_or_404(GameNight, game_night_id)
-    try:
-        night_policy.require_editable(game_night)
-    except night_policy.NightRuleError as e:
-        return False, str(e)
+    night_policy.require_editable(game_night)
 
     if action == "add":
         if not game_id or not round_number:
-            return False, "Please select a game and round number."
+            raise ServiceError("Please select a game and round number.")
         try:
             game_id, round_number = int(game_id), int(round_number)
         except (TypeError, ValueError):
-            return False, "Please select a game and round number."
+            raise ServiceError("Please select a game and round number.") from None
         if round_number < 1 or db.session.get(Game, game_id) is None:
-            return False, "Please select a game and round number."
+            raise ServiceError("Please select a game and round number.")
 
         game_night_game = GameNightGame(
             game_night_id=game_night_id, game_id=game_id, round=round_number
@@ -240,20 +245,20 @@ def manage_game_in_night(
 
     elif action == "remove":
         if not game_night_game_id or not str(game_night_game_id).isdigit():
-            return False, "Game reference missing."
+            raise ServiceError("Game reference missing.")
 
         game_night_game = GameNightGame.query.filter_by(
             id=int(game_night_game_id), game_night_id=game_night_id
         ).first()
         if not game_night_game:
-            return False, "Game not found in this game night."
+            raise ServiceError("Game not found in this game night.")
         db.session.delete(game_night_game)
 
     else:
-        return False, "Unknown action."
+        raise ServiceError("Unknown action.")
 
     db.session.commit()
-    return True, f"Game {'added' if action == 'add' else 'removed'} successfully."
+    return f"Game {'added' if action == 'add' else 'removed'} successfully."
 
 
 def _optional_int(value):
@@ -266,37 +271,35 @@ def _optional_int(value):
 
 
 def _parse_results(game_night, scores_positions):
-    """{player_id: (score, position)} from the log-results body, or ValueError
-    with a message. Every player must be at this night."""
+    """{player_id: (score, position)} from the log-results body, or
+    ServiceError. Every player must be at this night."""
     if not isinstance(scores_positions, dict):
-        raise ValueError("Send results as an object keyed by player.")
+        raise ServiceError("Send results as an object keyed by player.")
     night_player_ids = {p.id for p in game_night.players}
     parsed = {}
     for data in scores_positions.values():
         if not isinstance(data, dict):
-            raise ValueError("Each result needs user_id, score and position.")
+            raise ServiceError("Each result needs user_id, score and position.")
         try:
             player_id = _optional_int(data.get("user_id"))
             score = _optional_int(data.get("score"))
             position = _optional_int(data.get("position"))
         except (TypeError, ValueError):
-            raise ValueError("Scores and places must be whole numbers.") from None
+            raise ServiceError("Scores and places must be whole numbers.") from None
         if player_id is None or player_id not in night_player_ids:
-            raise ValueError("Results can only be logged for this night's players.")
+            raise ServiceError("Results can only be logged for this night's players.")
         parsed[player_id] = (score, position)
     return parsed
 
 
 def log_results(game_night_id, game_night_game_id, scores_positions):
-    """Log results for a game night game. Returns (success, message);
-    a malformed body or a player from another night changes nothing."""
+    """Log results for a game night game. Returns the message to show; a
+    malformed body or a player from another night raises ServiceError and
+    changes nothing."""
     GameNightGame.query.filter_by(game_night_id=game_night_id, id=game_night_game_id).first_or_404()
     game_night = db.get_or_404(GameNight, game_night_id)
-    try:
-        night_policy.require_editable(game_night)
-        parsed = _parse_results(game_night, scores_positions)
-    except ValueError as e:
-        return False, str(e)
+    night_policy.require_editable(game_night)
+    parsed = _parse_results(game_night, scores_positions)
 
     for player_id, (score, position) in parsed.items():
         # Fetch or create a result entry for this player
@@ -312,7 +315,7 @@ def log_results(game_night_id, game_night_game_id, scores_positions):
         result.position = position
 
     db.session.commit()
-    return True, "Results logged successfully."
+    return "Results logged successfully."
 
 
 def get_log_results_data(game_night_id, game_night_game_id):
@@ -331,7 +334,7 @@ _TOGGLEABLE_FIELDS = {"closed"}
 def toggle_game_night_field(game_night_id, field):
     """Toggle voting open/closed. (Finalizing has its own finalize/unfinalize.)"""
     if field not in _TOGGLEABLE_FIELDS:
-        return False, "Invalid field."
+        raise ServiceError("Invalid field.")
 
     game_night = db.get_or_404(GameNight, game_night_id)
     setattr(game_night, field, not getattr(game_night, field))
@@ -341,10 +344,7 @@ def toggle_game_night_field(game_night_id, field):
             poll.closed = True
 
     db.session.commit()
-    return (
-        True,
-        f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}.",
-    )
+    return f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}."
 
 
 def _locked_night(game_night_id):

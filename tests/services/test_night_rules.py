@@ -12,6 +12,7 @@ from app.services import (
     tracker_services,
     voting_services,
 )
+from app.services.errors import ServiceError
 from app.services.night_policy import NightRuleError
 from tests.night_world import World
 
@@ -55,19 +56,17 @@ def test_policy_predicates(w):
 def test_log_results_refused_on_final_night(w):
     gn, gng, a, _ = _final_night(w)
     pa = w.player(gn, a)
-    ok, msg = gns.log_results(
-        gn.id, gng.id, {str(pa.id): {"user_id": pa.id, "score": 0, "position": 5}}
-    )
-    assert not ok and "finalized" in msg
+    with pytest.raises(NightRuleError, match="finalized"):
+        gns.log_results(gn.id, gng.id, {str(pa.id): {"user_id": pa.id, "score": 0, "position": 5}})
     assert Result.query.filter_by(game_night_game_id=gng.id, player_id=pa.id).one().position == 1
 
 
 def test_add_and_remove_game_refused_on_final_night(w):
     gn, gng, _, _ = _final_night(w)
-    ok, msg = gns.manage_game_in_night(gn.id, w.game().id, "add", 2)
-    assert not ok and "finalized" in msg
-    ok, msg = gns.manage_game_in_night(gn.id, None, "remove", game_night_game_id=gng.id)
-    assert not ok and "finalized" in msg
+    with pytest.raises(NightRuleError, match="finalized"):
+        gns.manage_game_in_night(gn.id, w.game().id, "add", 2)
+    with pytest.raises(NightRuleError, match="finalized"):
+        gns.manage_game_in_night(gn.id, None, "remove", game_night_game_id=gng.id)
     assert GameNightGame.query.filter_by(game_night_id=gn.id).count() == 1
     assert Result.query.filter_by(game_night_game_id=gng.id).count() == 2
 
@@ -76,14 +75,14 @@ def test_edit_final_night_refuses_date_and_attendee_changes(w):
     gn, _, a, b = _final_night(w)
     c = w.person("Cy")
     ids = [str(a.id), str(b.id)]
-    ok, msg = gns.edit_game_night(gn.id, "2031-02-02", "", ids)
-    assert not ok and "finalized" in msg
-    ok, msg = gns.edit_game_night(gn.id, "2030-01-01", "", ids + [str(c.id)])
-    assert not ok and "finalized" in msg
+    with pytest.raises(ServiceError, match="finalized"):
+        gns.edit_game_night(gn.id, "2031-02-02", "", ids)
+    with pytest.raises(ServiceError, match="finalized"):
+        gns.edit_game_night(gn.id, "2030-01-01", "", ids + [str(c.id)])
     assert Player.query.filter_by(game_night_id=gn.id).count() == 2
     # Notes can still change.
-    ok, _ = gns.edit_game_night(gn.id, "2030-01-01", "Great night", ids)
-    assert ok and gn.notes == "Great night"
+    gns.edit_game_night(gn.id, "2030-01-01", "Great night", ids)
+    assert gn.notes == "Great night"
 
 
 def _active_tracker(w, gn, people):
@@ -174,8 +173,7 @@ def test_deleting_a_night_deletes_its_rsvp_poll_and_closes_linked_polls(w):
     )
     w.polls.append(other.id)
 
-    ok, _ = gns.delete_game_night(gn.id)
-    assert ok
+    gns.delete_game_night(gn.id)
     assert _db.session.get(Poll, rsvp_id) is None
     other = _db.session.get(Poll, other.id)
     assert other.closed
@@ -222,8 +220,8 @@ def test_removing_a_tracked_player_is_blocked_with_a_message(w):
     a, b = w.person("Ann"), w.person("Bo")
     gn = w.night(a, b)
     _active_tracker(w, gn, [a, b])
-    ok, msg = gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id)])
-    assert not ok and "Bo" in msg and "tracker" in msg
+    with pytest.raises(ServiceError, match="Bo .*tracker"):
+        gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id)])
     assert Player.query.filter_by(game_night_id=gn.id).count() == 2
 
 
@@ -241,8 +239,7 @@ def test_removing_a_player_on_a_tracked_team_is_blocked(w):
         ],
         player_ids=[],
     )
-    ok, msg = gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id), str(c.id)])
-    assert not ok and "Bo" in msg
+    with pytest.raises(ServiceError, match="Bo"):
+        gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id), str(c.id)])
     # Cy isn't tracked, so removing only Cy is fine.
-    ok, _ = gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id), str(b.id)])
-    assert ok
+    gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id), str(b.id)])

@@ -118,8 +118,7 @@ def test_votes_never_outlive_a_nomination(admin_client, client, make_person, mak
     assert {v.game_id for v in GameVotes.query.filter_by(game_night_id=gn.id)} == {b.id}
 
     # 2. Bo is taken off the night: his nomination and everyone's votes for it go.
-    ok, _ = game_night_services.edit_game_night(gn.id, str(gn.date), "", [str(ann.id), str(cy.id)])
-    assert ok
+    game_night_services.edit_game_night(gn.id, str(gn.date), "", [str(ann.id), str(cy.id)])
     assert GameVotes.query.filter_by(game_night_id=gn.id).count() == 0
 
     # 3. Even a stray vote left in the table isn't shown as a nomination.
