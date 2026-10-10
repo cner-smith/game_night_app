@@ -1,4 +1,5 @@
 # blueprints/auth.py
+from urllib.parse import urlsplit
 
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required, login_user, logout_user
@@ -7,6 +8,17 @@ from app.services import auth_services, payment_services
 from app.utils import flash_if_no_action
 
 auth_bp = Blueprint("auth", __name__)
+
+
+def _safe_next(url):
+    """A same-site path to go to after login, or None. Browsers treat a
+    backslash like a slash, so "/\\evil.com" would leave the site."""
+    if not url or "\\" in url or any(ord(c) < 32 for c in url):
+        return None
+    parts = urlsplit(url)
+    if parts.scheme or parts.netloc or not url.startswith("/") or url.startswith("//"):
+        return None
+    return url
 
 
 @auth_bp.route("/login", methods=["GET", "POST"])
@@ -22,10 +34,7 @@ def login():
             if user.temp_pass:
                 flash("Please update your password.", "warning")
                 return redirect(url_for("auth.update_password"))
-            next_url = request.args.get("next") or ""
-            if next_url and (not next_url.startswith("/") or next_url.startswith("//")):
-                next_url = ""
-            return redirect(next_url or url_for("main.index"))
+            return redirect(_safe_next(request.args.get("next")) or url_for("main.index"))
         else:
             flash(message, "error")
 

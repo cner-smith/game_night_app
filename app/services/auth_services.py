@@ -9,8 +9,10 @@ from app.utils import send_email
 
 def login(email, password):
     """Authenticate user and return success status, message, and user instance."""
+    if not email or not password:
+        return False, "Enter your email and password.", None
     user = Person.query.filter(func.lower(Person.email) == email).first()
-    if user and bcrypt.check_password_hash(user.password, password):
+    if user and user.password and bcrypt.check_password_hash(user.password, password):
         if (
             user.temp_pass
             and user.temp_pass_expires_at
