@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db as _db
 from app.models import (
+    GameNightRankings,
     GameNominations,
     GameVotes,
     Player,
@@ -131,3 +132,28 @@ def test_a_game_is_nominated_once_per_night(w):
         GameNominations(game_night_id=gn.id, player_id=gn._players[a.id].id, game_id=game.id),
         GameNominations(game_night_id=gn.id, player_id=gn._players[b.id].id, game_id=game.id),
     )
+
+
+def test_night_rankings_tell_apart_places_below_fourth(w):
+    people = [w.person() for _ in range(6)]
+    gn = w.night(datetime.date(1840, 1, 1), people)
+    w.play(gn, w.game(), {p: i + 1 for i, p in enumerate(people)})
+    _db.session.commit()
+
+    ranks = {r.player_id: r.rank for r in GameNightRankings.query.filter_by(game_night_id=gn.id)}
+    assert [ranks[gn._players[p.id].id] for p in people] == [1, 2, 3, 4, 5, 6]
+
+
+def test_night_rankings_unchanged_when_everyone_places_in_top_four(w):
+    a, b, c = w.person(), w.person(), w.person()
+    gn = w.night(datetime.date(1840, 1, 1), [a, b, c])
+    w.play(gn, w.game(), {a: 1, b: 2, c: 3})
+    w.play(gn, w.game(), {a: 3, b: 1, c: 2}, round=2)
+    _db.session.commit()
+
+    rows = GameNightRankings.query.filter_by(game_night_id=gn.id).all()
+    by_player = {r.player_id: (r.rank, r.position_counts) for r in rows}
+    # Most firsts, then most seconds, and so on.
+    assert by_player[gn._players[b.id].id] == (1, [1, 1, 0, 0])
+    assert by_player[gn._players[a.id].id] == (2, [1, 0, 1, 0])
+    assert by_player[gn._players[c.id].id] == (3, [0, 1, 1, 0])

@@ -332,10 +332,14 @@ class GamesIndex(db.Model):  # SQL View
 class GameNightRankings(db.Model):  # SQL View
     __tablename__ = "game_night_rankings_view"
 
-    id = db.Column(db.Integer, primary_key=True)  # Artificial primary key from row_number()
+    # row_number() OVER (): not stable between queries, so only ever select
+    # columns from this view; never load or identify rows by id.
+    id = db.Column(db.Integer, primary_key=True)
     game_night_id = db.Column(db.Integer, nullable=False)
     player_id = db.Column(db.Integer, nullable=False)
-    position_counts = db.Column(db.ARRAY(db.Integer), nullable=False)  # Array of position counts
+    position_counts = db.Column(
+        db.ARRAY(db.Integer), nullable=False
+    )  # [number of 1sts, 2nds, ...], at least 4 long
     overall_score = db.Column(db.Integer, nullable=False)
     rank = db.Column(db.Integer, nullable=False)
 
