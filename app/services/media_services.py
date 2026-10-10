@@ -16,6 +16,8 @@ from flask import current_app
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pillow_heif import register_heif_opener
 
+from app.services.errors import ServiceError
+
 register_heif_opener()
 
 ALLOWED_FORMATS = {"JPEG", "PNG", "HEIF"}
@@ -23,7 +25,7 @@ MAX_PIXELS = 60_000_000  # guards against decompression bombs
 Image.MAX_IMAGE_PIXELS = MAX_PIXELS
 
 
-class MediaError(ValueError):
+class MediaError(ServiceError, ValueError):
     pass
 
 

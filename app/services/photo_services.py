@@ -10,6 +10,7 @@ uploader or an admin can delete a photo.
 from app.extensions import db
 from app.models import GameNightPhoto, Player
 from app.services import media_services
+from app.services.errors import ServiceError
 
 FULL_SIDE = 2400
 THUMB_SIDE = 480
@@ -31,13 +32,10 @@ def can_delete(photo, user):
 
 def upload(game_night, user, file_storage, caption=""):
     if not can_upload(game_night, user):
-        return False, "Only players at this game night can add photos."
-    try:
-        rel, thumb = media_services.save_image(
-            file_storage, f"photos/{game_night.id}", FULL_SIDE, THUMB_SIDE
-        )
-    except media_services.MediaError as e:
-        return False, str(e)
+        raise ServiceError("Only players at this game night can add photos.", status=403)
+    rel, thumb = media_services.save_image(
+        file_storage, f"photos/{game_night.id}", FULL_SIDE, THUMB_SIDE
+    )
     with media_services.removed_if_not_committed(rel, thumb):
         db.session.add(
             GameNightPhoto(
@@ -49,17 +47,19 @@ def upload(game_night, user, file_storage, caption=""):
             )
         )
         db.session.commit()
-    return True, "Photo added."
+    return "Photo added."
 
 
 def delete(photo, user):
     if not can_delete(photo, user):
-        return False, "Only whoever uploaded it, the host or an admin can delete a photo."
+        raise ServiceError(
+            "Only whoever uploaded it, the host or an admin can delete a photo.", status=403
+        )
     files = (photo.path, photo.thumb_path)
     db.session.delete(photo)
     db.session.commit()
     media_services.delete(*files)  # only once the row is gone
-    return True, "Photo deleted."
+    return "Photo deleted."
 
 
 def files_for_night(game_night):

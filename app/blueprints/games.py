@@ -6,7 +6,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.models import Game, OwnedBy
+from app.models import Game
 from app.services import badge_services, games_services
 from app.services.bgg_service import BGGService
 from app.utils import admin_required
@@ -56,20 +56,10 @@ def add_game():
 @games_bp.route("/game/<int:game_id>")
 @login_required
 def view_game(game_id):
-    from app.models import Person
-
     context = games_services.get_game_details(game_id, current_user.id)
-    game = context["game"]
     assignable_owners = []
     if current_user.is_admin_or_owner:
-        owned_ids = {ob.person_id for ob in game.owners}
-        assignable_owners = [
-            p
-            for p in Person.query.filter_by(active=True)
-            .order_by(Person.first_name, Person.last_name)
-            .all()
-            if p.id not in owned_ids
-        ]
+        assignable_owners = games_services.assignable_owners(context["game"])
     context.update(
         game_stat=games_services.get_play_stats().get(game_id),
         today=local_today(),
@@ -165,21 +155,8 @@ def vote_wishlist(game_id):
 @games_bp.route("/wishlist/toggle/<int:game_id>", methods=["POST"])
 @login_required
 def toggle_wishlist(game_id):
-    from app.models import Wishlist
-
-    # If already owned, prevent wishlisting
-    owns_game = OwnedBy.query.filter_by(game_id=game_id, person_id=current_user.id).first()
-    if owns_game:
-        flash("You already own this game — no need to wishlist it.", "info")
-        return redirect(request.referrer or url_for("games.my_wishlist"))
-
-    existing = Wishlist.query.filter_by(game_id=game_id, person_id=current_user.id).first()
-    if existing:
-        success, message = games_services.modify_wishlist(current_user.id, game_id, remove=True)
-    else:
-        success, message = games_services.modify_wishlist(current_user.id, game_id, add=True)
-
-    flash(message, "success" if success else "error")
+    category, message = games_services.toggle_wishlist(current_user.id, game_id)
+    flash(message, category)
     return redirect(request.referrer or url_for("games.my_wishlist"))
 
 

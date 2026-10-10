@@ -41,7 +41,6 @@ def register_blueprints(app):
     app.register_blueprint(blueprints.tracker_bp)
     app.register_blueprint(blueprints.photos_bp)
     app.register_blueprint(blueprints.food_bp)
-    # test_bp removed — was a debug artifact registered unconditionally
 
 
 def setup_logging(debug: bool = False):
@@ -108,6 +107,9 @@ def create_app(config_class=None):
     init_extensions(app)
     register_user_loader(app)
     register_blueprints(app)
+    from app.utils.errors import register_error_handlers
+
+    register_error_handlers(app)
     from app.cli import badges_cli
 
     app.cli.add_command(badges_cli)

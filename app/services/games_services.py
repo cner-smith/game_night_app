@@ -18,6 +18,7 @@ from app.models import (
     db,
 )
 from app.services.bgg_service import BGGService
+from app.services.db_utils import add_unless_duplicate
 
 
 def get_or_create_game(game_name, bgg_id=None):
@@ -214,9 +215,13 @@ def add_game_to_wishlist(user_id, game_name, bgg_id=None, game_id=None):
         return False, error, None
     if OwnedBy.query.filter_by(game_id=game.id, person_id=user_id).first():
         return False, f'You already own "{game.name}".', game
+    already = f'"{game.name}" is already on your wishlist.'
     if Wishlist.query.filter_by(game_id=game.id, person_id=user_id).first():
-        return False, f'"{game.name}" is already on your wishlist.', game
-    db.session.add(Wishlist(game_id=game.id, person_id=user_id))
+        return False, already, game
+    if not add_unless_duplicate(
+        Wishlist(game_id=game.id, person_id=user_id), "uq_wishlist_person_game"
+    ):
+        return False, already, game  # a double-submit added it first
     db.session.commit()
     return True, f'Added "{game.name}" to your wishlist.', game
 
@@ -280,9 +285,10 @@ def modify_wishlist(user_id, game_id, add=False, remove=False):
     wishlist_entry = Wishlist.query.filter_by(game_id=game_id, person_id=user_id).first()
 
     if add:
-        if wishlist_entry:
+        if wishlist_entry or not add_unless_duplicate(
+            Wishlist(game_id=game_id, person_id=user_id), "uq_wishlist_person_game"
+        ):
             return False, "Game is already in your wishlist."
-        db.session.add(Wishlist(game_id=game_id, person_id=user_id))
         db.session.commit()
         return True, "Game added to your wishlist."
 
@@ -292,6 +298,23 @@ def modify_wishlist(user_id, game_id, add=False, remove=False):
         return True, "Game removed from your wishlist."
 
     return False, "Game not found in your wishlist."
+
+
+def toggle_wishlist(user_id, game_id):
+    """Wishlist a game, or take it off; owned games can't be wishlisted.
+    Returns (flash category, message)."""
+    if OwnedBy.query.filter_by(game_id=game_id, person_id=user_id).first():
+        return "info", "You already own this game — no need to wishlist it."
+    on_it = Wishlist.query.filter_by(game_id=game_id, person_id=user_id).first() is not None
+    success, message = modify_wishlist(user_id, game_id, add=not on_it, remove=on_it)
+    return ("success" if success else "error"), message
+
+
+def assignable_owners(game):
+    """Active people who don't own this game yet, for the admin's owner picker."""
+    owned_ids = {ob.person_id for ob in game.owners}
+    people = Person.query.filter_by(active=True).order_by(Person.first_name, Person.last_name)
+    return [p for p in people if p.id not in owned_ids]
 
 
 def modify_ownership(person_id, game_id, add=True, *, actor_is_self=True):
@@ -305,9 +328,12 @@ def modify_ownership(person_id, game_id, add=True, *, actor_is_self=True):
     subject = "You" if actor_is_self else "Owner"
 
     if add:
-        if not ownership:
-            db.session.add(OwnedBy(game_id=game.id, person_id=person_id))
-            modify_wishlist(person_id, game.id, remove=True)
+        # A double-submitted claim may have added it since the lookup.
+        if not ownership and add_unless_duplicate(
+            OwnedBy(game_id=game.id, person_id=person_id), "uq_ownedby_game_person"
+        ):
+            # Owning it takes it off their wishlist, in the same commit.
+            Wishlist.query.filter_by(game_id=game.id, person_id=person_id).delete()
             db.session.commit()
             return True, f'{subject} now own "{game.name}".'
         return False, f'{subject} already own "{game.name}".'

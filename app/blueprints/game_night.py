@@ -6,7 +6,6 @@ import pytz
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.models import TrackerSession
 from app.services import (
     admin_services,
     food_services,
@@ -15,10 +14,21 @@ from app.services import (
     night_policy,
     photo_services,
     poll_services,
+    tracker_services,
 )
+from app.services.errors import ServiceError
 from app.utils import game_night_access_required, host_required, night_manager_required
+from app.utils.errors import service_error_response
 
 game_night_bp = Blueprint("game_night", __name__)
+
+
+@game_night_bp.errorhandler(ServiceError)
+def _refused(error):
+    """A refused change to a night: back to the night's page."""
+    night_id = (request.view_args or {}).get("game_night_id")
+    target = url_for("game_night.view_game_night", game_night_id=night_id) if night_id else None
+    return service_error_response(error, redirect_to=target)
 
 
 def _local_today():
@@ -34,23 +44,23 @@ def start_game_night():
     if request.method == "POST":
         try:
             food = food_services.parse_food_settings(form, current_user.id)
-        except food_services.FoodError as e:
-            flash(str(e), "error")
-        else:
-            success, message, game_night = game_night_services.start_game_night(
+            game_night = game_night_services.start_game_night(
                 form.get("date"),
                 form.get("notes"),
                 form.getlist("attendees"),
                 food,
                 host_id=current_user.id,
                 address=form.get("address"),
+                rsvp_poll=bool(form.get("rsvp_poll")),
             )
-            if success and form.get("rsvp_poll"):
-                poll_services.create_availability_poll(game_night.id, current_user.id)
+        except ServiceError as e:
+            flash(str(e), "error")  # stay on the form
+        else:
+            message = "Game night started."
+            if form.get("rsvp_poll"):
                 message = "Game night started. Players can RSVP on its page."
-            flash(message, "success" if success else "error")
-            if success:
-                return redirect(url_for("game_night.view_game_night", game_night_id=game_night.id))
+            flash(message, "success")
+            return redirect(url_for("game_night.view_game_night", game_night_id=game_night.id))
 
     context = {
         "people": admin_services.get_all_people(),
@@ -87,21 +97,9 @@ def quick_add_person():
 def view_game_night(game_night_id):
     """View the details of a specific game night."""
     context = game_night_services.get_view_game_night_details(game_night_id, current_user.id)
-    game_night_games = context.get("game_night_games", [])
-    tracker_sessions = (
-        {
-            ts.game_night_game_id: ts
-            for ts in TrackerSession.query.filter(
-                TrackerSession.game_night_game_id.in_(
-                    [gng.game_night_game_id for gng in game_night_games]
-                ),
-                TrackerSession.status.in_(["configuring", "active"]),
-            ).all()
-        }
-        if game_night_games
-        else {}
+    context["tracker_sessions"] = tracker_services.open_sessions_by_game(
+        [gng.game_night_game_id for gng in context.get("game_night_games", [])]
     )
-    context["tracker_sessions"] = tracker_sessions
     context["night_polls"] = [
         poll_services.view_context(poll, current_user.id)
         for poll in context["game_night"].polls
@@ -131,16 +129,13 @@ def edit_game_night(game_night_id):
 
     if request.method == "POST":
         form = request.form
+        host_id = None
+        if current_user.is_admin_or_owner and form.get("host_id") is not None:
+            raw = form.get("host_id", "")
+            host_id = int(raw) if raw.isdigit() else 0  # 0 = no host
         try:
             food = food_services.parse_food_settings(form, current_user.id)
-        except food_services.FoodError as e:
-            flash(str(e), "error")
-        else:
-            host_id = None
-            if current_user.is_admin_or_owner and form.get("host_id") is not None:
-                raw = form.get("host_id", "")
-                host_id = int(raw) if raw.isdigit() else 0  # 0 = no host
-            success, message = game_night_services.edit_game_night(
+            message = game_night_services.edit_game_night(
                 game_night_id,
                 form.get("date"),
                 form.get("notes"),
@@ -149,9 +144,11 @@ def edit_game_night(game_night_id):
                 host_id=host_id,
                 address=form.get("address"),
             )
-            flash(message, "success" if success else "error")
-            if success:
-                return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
+        except ServiceError as e:
+            flash(str(e), "error")  # stay on the form
+        else:
+            flash(message, "success")
+            return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
     context = {
         "game_night": game_night,
@@ -175,10 +172,10 @@ def manage_game_in_night(game_night_id):
     game_id = request.form.get("game_id")
     round_number = request.form.get("round_number")
 
-    success, message = game_night_services.manage_game_in_night(
+    message = game_night_services.manage_game_in_night(
         game_night_id, game_id, action, round_number, game_night_game_id
     )
-    flash(message, "success" if success else "error")
+    flash(message, "success")
 
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
@@ -195,9 +192,8 @@ def log_results(game_night_id, game_night_game_id):
             flash("No data received", "error")
             return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
-        success, message = game_night_services.log_results(game_night_id, game_night_game_id, data)
-        if not success:
-            return message, 400
+        # A refused body gets a 400 from the ServiceError handler ({"error": ...}).
+        message = game_night_services.log_results(game_night_id, game_night_game_id, data)
         flash(message, "success")
         return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
@@ -218,8 +214,8 @@ def log_results(game_night_id, game_night_game_id):
 @login_required
 @night_manager_required
 def toggle_game_night_field(game_night_id, field):
-    success, message = game_night_services.toggle_game_night_field(game_night_id, field)
-    flash(message, "success" if success else "error")
+    message = game_night_services.toggle_game_night_field(game_night_id, field)
+    flash(message, "success")
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
 
@@ -250,11 +246,10 @@ def add_game_to_night(game_night_id):
         game_id = request.form.get("game_id", type=int)
         round_number = request.form.get("round", type=int)
 
-        success, message = game_night_services.manage_game_in_night(
+        message = game_night_services.manage_game_in_night(
             game_night_id=game_night_id, game_id=game_id, action="add", round_number=round_number
         )
-
-        flash(message, "success" if success else "danger")
+        flash(message, "success")
         return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
     game_night = game_night_services.get_game_night_by_id(game_night_id)
@@ -277,8 +272,11 @@ def add_game_to_night(game_night_id):
 @login_required
 @night_manager_required
 def delete_game_night(game_night_id):
-    success, message = game_night_services.delete_game_night(game_night_id)
-    flash(message, "success" if success else "error")
+    try:
+        message = game_night_services.delete_game_night(game_night_id)
+    except ServiceError as e:
+        return service_error_response(e, redirect_to=url_for("main.index"))
+    flash(message, "success")
     return redirect(url_for("main.index"))
 
 
@@ -286,9 +284,13 @@ def delete_game_night(game_night_id):
 @login_required
 @night_manager_required
 def create_availability_poll(game_night_id):
-    success, message = poll_services.create_availability_poll(game_night_id, current_user.id)
-    flash(message, "success" if success else "error")
-    return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id) + "#polls")
+    polls_url = url_for("game_night.view_game_night", game_night_id=game_night_id) + "#polls"
+    try:
+        message = poll_services.create_availability_poll(game_night_id, current_user.id)
+    except ServiceError as e:
+        return service_error_response(e, redirect_to=polls_url)
+    flash(message, "success")
+    return redirect(polls_url)
 
 
 @game_night_bp.route("/game_night/<int:game_night_id>/recap")
