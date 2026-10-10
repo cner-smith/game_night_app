@@ -180,6 +180,40 @@ def test_deleting_a_night_deletes_its_rsvp_poll_and_closes_linked_polls(w):
     assert other.closed
 
 
+# --- picking a date-poll date twice -------------------------------------------
+
+
+def test_pick_date_rechecks_the_poll_under_a_lock(w):
+    """A second pick (double-submit) holding a stale copy of the poll must see
+    the first pick and not create another night."""
+    import datetime as dt
+
+    from sqlalchemy import text
+
+    from app.models import GameNight
+    from app.services import date_poll_services as dps
+
+    host = w.person("Host")
+    poll = dps.create_date_poll("When?", None, [dt.date(2032, 3, 5)], host.id)
+    w.polls.append(poll.id)
+    first = w.night(host)
+    option_id = poll.options[0].id
+    # The first request picks in another connection; our copy still says unpicked.
+    with _db.engine.begin() as conn:
+        conn.execute(
+            text("UPDATE polls SET picked_game_night_id = :n, closed = true WHERE id = :p"),
+            {"n": first.id, "p": poll.id},
+        )
+    assert poll.picked_game_night_id is None
+
+    nights_before = GameNight.query.count()
+    ok, msg, night = dps.pick_date(poll, option_id, host.id)
+    if night is not None:
+        w.nights.append(night.id)  # cleaned up even if this regresses
+    assert not ok and night is None and "already" in msg
+    assert GameNight.query.count() == nights_before
+
+
 # --- removing a player who is in a tracker ------------------------------------
 
 
