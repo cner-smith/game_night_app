@@ -44,7 +44,7 @@ def test_finalize_route_triggers_badge_evaluation(admin_client, app, db):
     pl_id = pl.id
     op_id = op.id
 
-    resp = admin_client.post(f"/game_night/{gn_id}/toggle/final")
+    resp = admin_client.post(f"/game_night/{gn_id}/finalize")
     assert resp.status_code in (200, 302)
 
     from app.models import Badge
@@ -107,7 +107,7 @@ def test_finalize_succeeds_even_if_badge_evaluation_raises(admin_client, app, db
         lambda _: (_ for _ in ()).throw(RuntimeError("boom")),
     )
 
-    resp = admin_client.post(f"/game_night/{gn_id}/toggle/final")
+    resp = admin_client.post(f"/game_night/{gn_id}/finalize")
     assert resp.status_code in (200, 302)
 
     from app.models import GameNight as GN

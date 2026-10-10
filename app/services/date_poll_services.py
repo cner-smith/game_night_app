@@ -159,6 +159,9 @@ def respondent_count(poll: Poll) -> int:
 
 
 def pick_date(poll: Poll, option_id: int, admin_id: int) -> tuple[bool, str, GameNight | None]:
+    # Lock and re-read the poll so a double-submit waits for the first pick
+    # and then sees it, instead of creating a second night.
+    poll = Poll.query.filter_by(id=poll.id).with_for_update().populate_existing().one()
     if not poll.date_poll:
         return False, "That isn't a date poll.", None
     if poll.picked_game_night_id is not None:
