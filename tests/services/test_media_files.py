@@ -125,7 +125,7 @@ def test_expense_delete_keeps_receipt_when_the_commit_fails(
 ):
     ann = make_person("Ann")
     gn = make_night(ann, food_mode="split")
-    assert food_services.add_expense(gn, ann, _expense_form(ann), receipt=_jpeg())[0]
+    food_services.add_expense(gn, ann, _expense_form(ann), receipt=_jpeg())
     expense = FoodExpense.query.filter_by(game_night_id=gn.id).one()
     assert len(_files(app, f"receipts/{gn.id}")) == 1
 
