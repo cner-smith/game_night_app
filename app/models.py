@@ -505,7 +505,12 @@ tracker_team_players = db.Table(
         db.ForeignKey("tracker_teams.id", ondelete="CASCADE"),
         primary_key=True,
     ),
-    db.Column("player_id", db.Integer, db.ForeignKey("players.id"), primary_key=True),
+    db.Column(
+        "player_id",
+        db.Integer,
+        db.ForeignKey("players.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
 )
 
 
@@ -575,7 +580,9 @@ class TrackerValue(db.Model):
     tracker_field_id = db.Column(
         db.Integer, db.ForeignKey("tracker_fields.id", ondelete="CASCADE"), nullable=False
     )
-    player_id = db.Column(db.Integer, db.ForeignKey("players.id"), nullable=True)
+    player_id = db.Column(
+        db.Integer, db.ForeignKey("players.id", ondelete="CASCADE"), nullable=True
+    )
     team_id = db.Column(
         db.Integer, db.ForeignKey("tracker_teams.id", ondelete="CASCADE"), nullable=True
     )
