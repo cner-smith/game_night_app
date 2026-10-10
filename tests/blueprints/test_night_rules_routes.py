@@ -187,6 +187,52 @@ def test_players_cannot_finalize(client, w):
     assert not gn.final
 
 
+FINALIZE_LABEL = "Finalize night · awards badges"
+
+
+def _local_today(app):
+    import datetime as dt
+
+    import pytz
+
+    return dt.datetime.now(pytz.timezone(app.config["APP_TIMEZONE"])).date()
+
+
+def test_finalize_button_needs_a_played_game_and_a_past_or_current_date(app, client, w):
+    import datetime as dt
+
+    today = _local_today(app)
+    host, ann = w.person("Host"), w.person("Ann")
+    ready = w.night(host, ann, host=host, date=today)
+    w.play(ready, positions={host: 1, ann: 2})
+    future = w.night(host, ann, host=host, date=today + dt.timedelta(days=3))
+    w.play(future, positions={host: 1, ann: 2})
+    no_results = w.night(host, ann, host=host, date=today - dt.timedelta(days=1))
+    w.play(no_results)
+
+    login(client, host)
+    page = client.get(f"/game_night/{ready.id}").get_data(as_text=True)
+    assert FINALIZE_LABEL in page
+    played = page.index('id="played"')
+    assert page.index(FINALIZE_LABEL) > played  # in the Games played card, not the header
+    assert f"/game_night/{ready.id}/finalize" in page
+    for night in (future, no_results):
+        page = client.get(f"/game_night/{night.id}").get_data(as_text=True)
+        assert FINALIZE_LABEL not in page
+        assert f"/game_night/{night.id}/finalize" not in page
+
+    login(client, ann)
+    assert FINALIZE_LABEL not in client.get(f"/game_night/{ready.id}").get_data(as_text=True)
+
+
+def test_reopen_stays_available_on_a_final_night(client, w):
+    host, ann, gn = _played_night(w)
+    login(client, host)
+    client.post(f"/game_night/{gn.id}/finalize")
+    page = client.get(f"/game_night/{gn.id}").get_data(as_text=True)
+    assert f"/game_night/{gn.id}/unfinalize" in page and FINALIZE_LABEL not in page
+
+
 # --- log results checks its body ---------------------------------------------
 
 

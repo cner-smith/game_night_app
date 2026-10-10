@@ -1,6 +1,9 @@
 # blueprints/game_night.py
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for
+from datetime import datetime
+
+import pytz
+from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.models import TrackerSession
@@ -16,6 +19,11 @@ from app.services import (
 from app.utils import game_night_access_required, host_required, night_manager_required
 
 game_night_bp = Blueprint("game_night", __name__)
+
+
+def _local_today():
+    """Today in the app's timezone (APP_TIMEZONE), like the home page."""
+    return datetime.now(pytz.timezone(current_app.config["APP_TIMEZONE"])).date()
 
 
 @game_night_bp.route("/game_night/start", methods=["GET", "POST"])
@@ -102,6 +110,7 @@ def view_game_night(game_night_id):
     game_night = context["game_night"]
     context["can_manage"] = night_policy.can_manage(game_night, current_user)
     context["voting_open"] = night_policy.voting_open(game_night)
+    context["ready_to_finalize"] = night_policy.ready_to_finalize(game_night, _local_today())
     context["can_upload_photos"] = photo_services.can_upload(game_night, current_user)
     if game_night.food_mode != "none":
         context["food_rows"] = food_services.expense_rows(game_night, current_user)

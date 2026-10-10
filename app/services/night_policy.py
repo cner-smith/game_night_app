@@ -29,6 +29,16 @@ def voting_open(night) -> bool:
     return not night.closed and not night.final
 
 
+def ready_to_finalize(night, today) -> bool:
+    """Worth offering Finalize: the night has happened (today is the app's
+    local date) and at least one game has results."""
+    return (
+        not night.final
+        and night.date <= today
+        and any(gng.results for gng in night.game_night_games)
+    )
+
+
 def require_manager(night, user) -> None:
     if not can_manage(night, user):
         raise NightRuleError(MANAGER_MESSAGE)
