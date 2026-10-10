@@ -14,6 +14,10 @@ from app.services import game_night_services, games_services, tracker_services, 
 from app.services.errors import ServiceError
 from tests.night_world import World
 
+# The competing insert runs on a second connection, which can't see (and would
+# block on) rows still uncommitted in the per-test transaction.
+pytestmark = pytest.mark.real_commits
+
 
 @pytest.fixture()
 def w(app, db):
