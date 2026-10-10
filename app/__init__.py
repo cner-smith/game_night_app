@@ -36,7 +36,6 @@ def register_blueprints(app):
     app.register_blueprint(blueprints.game_night_bp)
     app.register_blueprint(blueprints.games_bp)
     app.register_blueprint(blueprints.voting_bp)
-    app.register_blueprint(blueprints.reminders_bp)
     app.register_blueprint(blueprints.main_bp)
     app.register_blueprint(blueprints.polls_bp)
     app.register_blueprint(blueprints.tracker_bp)

@@ -175,7 +175,7 @@ def test_evaluate_badges_skips_unfinalized_night(app, db, badge_night):
         # Un-finalize the night
         from app.models import GameNight as GN
 
-        gn = GN.query.get(gn_id)
+        gn = _db.session.get(GN, gn_id)
         gn.final = False
         _db.session.commit()
 
