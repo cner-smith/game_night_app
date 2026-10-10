@@ -54,6 +54,9 @@ def vote_game(game_night_id):
     votes_dict = {}
     for key, value in request.form.items():
         if key.startswith("votes[") and key.endswith("]"):
+            if not key[6:-1].isdigit():
+                flash("That ranking couldn't be read. Please try again.", "error")
+                return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
             game_id = int(key[6:-1])
             if value.strip():
                 try:

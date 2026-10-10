@@ -18,6 +18,7 @@ from app.models import (
     GameRatings,
     GameVotes,
     OwnedBy,
+    Person,
     PersonBadge,
     Player,
     Result,
@@ -40,12 +41,29 @@ def parse_date(date_str):
         return None
 
 
+def _person_ids(raw_ids):
+    """Person ids from a form list, or None if any isn't a real person."""
+    try:
+        ids = {int(i) for i in raw_ids}
+    except (TypeError, ValueError):
+        return None
+    if ids and Person.query.filter(Person.id.in_(ids)).count() != len(ids):
+        return None
+    return ids
+
+
+BAD_PLAYERS_MESSAGE = "Pick players from the list."
+
+
 def manage_attendees(game_night, attendees_ids):
     """Sync a game night's players to the given person ids.
 
-    Returns an error message (and changes nothing) if a player being removed
-    already has results logged; their nominations and votes go with them."""
-    new_attendees = {int(i) for i in attendees_ids}
+    Returns an error message (and changes nothing) if an id isn't a person,
+    or a player being removed already has results logged or is in a tracker;
+    their nominations and votes go with them."""
+    new_attendees = _person_ids(attendees_ids)
+    if new_attendees is None:
+        return BAD_PLAYERS_MESSAGE
     removing = [p for p in game_night.players if p.people_id not in new_attendees]
     with_results = [p for p in removing if p.results]
     if with_results:
@@ -96,7 +114,10 @@ def start_game_night(
     db.session.add(game_night)
     db.session.flush()  # get game_night.id without committing
 
-    manage_attendees(game_night, attendees_ids)
+    error = manage_attendees(game_night, attendees_ids)
+    if error:
+        db.session.rollback()
+        return False, error, None
     db.session.commit()
 
     return True, "Game night started.", game_night
@@ -122,9 +143,13 @@ def edit_game_night(
     date = parse_date(date_str)
     if not date:
         return False, "Invalid date format. Please use YYYY-MM-DD."
+    attendee_ids = _person_ids(attendees_ids)
+    if attendee_ids is None:
+        return False, BAD_PLAYERS_MESSAGE
+    if host_id and db.session.get(Person, host_id) is None:
+        return False, "Pick a host from the list."
     if not night_policy.is_editable(game_night) and (
-        date != game_night.date
-        or {int(i) for i in attendees_ids} != {p.people_id for p in game_night.players}
+        date != game_night.date or attendee_ids != {p.people_id for p in game_night.players}
     ):
         return False, night_policy.FINAL_MESSAGE + " (Its date and players are locked.)"
 
@@ -138,7 +163,7 @@ def edit_game_night(
         food_services.apply_food_settings(game_night, *food)
     if host_id is not None:
         game_night.host_id = host_id or None
-    error = manage_attendees(game_night, attendees_ids)
+    error = manage_attendees(game_night, attendee_ids)
     if error:
         db.session.rollback()
         return False, error
@@ -201,22 +226,31 @@ def manage_game_in_night(
     if action == "add":
         if not game_id or not round_number:
             return False, "Please select a game and round number."
+        try:
+            game_id, round_number = int(game_id), int(round_number)
+        except (TypeError, ValueError):
+            return False, "Please select a game and round number."
+        if round_number < 1 or db.session.get(Game, game_id) is None:
+            return False, "Please select a game and round number."
 
         game_night_game = GameNightGame(
-            game_night_id=game_night_id, game_id=game_id, round=int(round_number)
+            game_night_id=game_night_id, game_id=game_id, round=round_number
         )
         db.session.add(game_night_game)
 
     elif action == "remove":
-        if not game_night_game_id:
+        if not game_night_game_id or not str(game_night_game_id).isdigit():
             return False, "Game reference missing."
 
         game_night_game = GameNightGame.query.filter_by(
-            id=game_night_game_id, game_night_id=game_night_id
+            id=int(game_night_game_id), game_night_id=game_night_id
         ).first()
         if not game_night_game:
             return False, "Game not found in this game night."
         db.session.delete(game_night_game)
+
+    else:
+        return False, "Unknown action."
 
     db.session.commit()
     return True, f"Game {'added' if action == 'add' else 'removed'} successfully."

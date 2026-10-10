@@ -8,6 +8,8 @@ from app.models import (
 )
 from app.services import night_policy
 
+VALID_RANKS = {1, 2, 3}
+
 
 def _voting_error(game_night_id):
     """Why nominating or ranking isn't allowed right now, or None."""
@@ -33,6 +35,12 @@ def nominate_game(game_night_id, user_id, game_id):
 
     if not game_id:
         return False, "You must select a game to nominate."
+    try:
+        game_id = int(game_id)
+    except (TypeError, ValueError):
+        return False, "You must select a game to nominate."
+    if db.session.get(Game, game_id) is None:
+        return False, "That game isn't in the collection."
 
     existing_nomination = GameNominations.query.filter_by(
         game_night_id=game_night_id, game_id=game_id
@@ -75,6 +83,15 @@ def vote_game(game_night_id, user_id, votes_dict):
         return False, "User is not a player in this game night."
 
     player_id = current_player.id
+
+    nominated = {n.game_id for n in GameNominations.query.filter_by(game_night_id=game_night_id)}
+    if any(game_id not in nominated for game_id in votes_dict):
+        return (
+            False,
+            "Only nominated games can be ranked. The list may have changed; check it and save again.",
+        )
+    if any(rank is not None and rank not in VALID_RANKS for rank in votes_dict.values()):
+        return False, "Rank games 1st, 2nd or 3rd."
 
     used_ranks = set()
     for game_id, rank in votes_dict.items():

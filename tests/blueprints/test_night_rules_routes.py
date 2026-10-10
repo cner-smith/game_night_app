@@ -4,7 +4,7 @@ malformed input gets back."""
 import pytest
 
 from app.extensions import db as _db
-from app.models import Result, TrackerSession
+from app.models import GameNightGame, GameNominations, GameVotes, Result, TrackerSession
 from app.services import tracker_services
 from tests.conftest import login
 from tests.night_world import World
@@ -264,3 +264,145 @@ def test_log_results_page_404s_for_another_nights_game(client, w):
     assert client.get(f"/game_night/{gn.id}/log_results/{other_gng.id}").status_code == 404
     resp = _log(client, gn, other_gng, {str(ph.id): {"user_id": ph.id, "score": 1, "position": 1}})
     assert resp.status_code == 404
+
+
+# --- malformed input gets a message, not a 500 ----------------------------------
+
+
+def _flashes(client):
+    with client.session_transaction() as sess:
+        return [m for _, m in sess.get("_flashes", [])]
+
+
+def test_unknown_manage_game_action_is_an_error(client, w):
+    host = w.person("Host")
+    gn = w.night(host, host=host)
+    gng = w.play(gn)
+    login(client, host)
+    client.post(
+        f"/game_night/{gn.id}/manage_game",
+        data={"action": "explode", "game_night_game_id": gng.id},
+    )
+    assert not any("removed successfully" in m for m in _flashes(client))
+    assert any("action" in m.lower() for m in _flashes(client))
+    assert GameNightGame.query.filter_by(game_night_id=gn.id).count() == 1
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"action": "add", "game_id": "GAME", "round_number": "two"},
+        {"action": "add", "game_id": "999999999", "round_number": "1"},
+        {"action": "add", "game_id": "abc", "round_number": "1"},
+        {"action": "remove", "game_night_game_id": "abc"},
+    ],
+)
+def test_add_or_remove_game_with_bad_input_flashes(client, w, data):
+    host = w.person("Host")
+    gn = w.night(host, host=host)
+    game = w.game()
+    if data.get("game_id") == "GAME":
+        data = {**data, "game_id": str(game.id)}
+    login(client, host)
+    resp = client.post(f"/game_night/{gn.id}/manage_game", data=data)
+    assert resp.status_code == 302
+    assert GameNightGame.query.filter_by(game_night_id=gn.id).count() == 0
+    assert _flashes(client)
+
+
+def test_vote_with_a_bad_game_key_is_refused(client, w):
+    ann = w.person("Ann")
+    gn = w.night(ann)
+    login(client, ann)
+    resp = client.post(f"/game_night/{gn.id}/vote", data={"votes[abc]": "1"})
+    assert resp.status_code == 302
+    assert GameVotes.query.filter_by(game_night_id=gn.id).count() == 0
+
+
+def test_vote_for_an_unnominated_or_missing_game_is_refused(client, w):
+    ann = w.person("Ann")
+    gn = w.night(ann)
+    game = w.game()
+    login(client, ann)
+    for gid in (game.id, 999999999):
+        resp = client.post(f"/game_night/{gn.id}/vote", data={f"votes[{gid}]": "1"})
+        assert resp.status_code == 302
+    assert GameVotes.query.filter_by(game_night_id=gn.id).count() == 0
+
+
+@pytest.mark.parametrize("rank", ["0", "4", "-1"])
+def test_vote_rank_must_be_1_to_3(client, w, rank):
+    ann = w.person("Ann")
+    gn = w.night(ann)
+    game = w.game()
+    from app.services import voting_services
+
+    voting_services.nominate_game(gn.id, ann.id, game.id)
+    login(client, ann)
+    client.post(f"/game_night/{gn.id}/vote", data={f"votes[{game.id}]": rank})
+    assert GameVotes.query.filter_by(game_night_id=gn.id).count() == 0
+
+
+@pytest.mark.parametrize("game_id", ["abc", "999999999"])
+def test_nominate_a_bad_game_is_refused(client, w, game_id):
+    ann = w.person("Ann")
+    gn = w.night(ann)
+    login(client, ann)
+    resp = client.post(f"/game_night/{gn.id}/nominate", data={"game_id": game_id})
+    assert resp.status_code == 302
+    assert GameNominations.query.filter_by(game_night_id=gn.id).count() == 0
+
+
+def test_edit_night_with_bad_attendee_or_host_flashes(client, w):
+    admin = w.person("Admin", admin=True)
+    gn = w.night(admin, host=admin)
+    login(client, admin)
+    base = {"date": "2030-01-01", "notes": "", "food_mode": "none"}
+    resp = client.post(f"/game_night/{gn.id}/edit", data={**base, "attendees": ["abc"]})
+    assert resp.status_code == 200
+    resp = client.post(
+        f"/game_night/{gn.id}/edit",
+        data={**base, "attendees": [str(admin.id)], "host_id": "999999999"},
+    )
+    assert resp.status_code == 200
+    _db.session.refresh(gn)
+    assert gn.host_id == admin.id
+
+
+def test_start_night_with_bad_attendee_flashes(client, w):
+    admin = w.person("Admin", admin=True)
+    login(client, admin)
+    resp = client.post(
+        "/game_night/start",
+        data={"date": "2030-01-01", "notes": "", "food_mode": "none", "attendees": ["abc"]},
+    )
+    assert resp.status_code == 200
+
+
+def test_tracker_bad_numbers_are_400(client, w):
+    host, ann, gn, gng, session, ph, pa = _tracked(w)
+    login(client, host)
+    field = session.fields[0]
+    bad_value = client.post(
+        f"/tracker/{session.id}/value",
+        data={"field_id": "x", "entity_type": "player", "entity_id": pa.id, "delta": "1"},
+    )
+    assert bad_value.status_code == 400
+    bad_delta = client.post(
+        f"/tracker/{session.id}/value",
+        data={"field_id": field.id, "entity_type": "player", "entity_id": pa.id, "delta": "lots"},
+    )
+    assert bad_delta.status_code == 400
+
+    other = w.play(gn)
+    setup = tracker_services.get_or_create_configuring_session(other.id)
+    resp = client.post(
+        f"/tracker/{setup.id}/field",
+        data={"type": "counter", "label": "Coins", "starting_value": "ten"},
+    )
+    assert resp.status_code == 400
+    resp = client.post(
+        f"/game_night/{other.id}/tracker",
+        data={"session_id": "abc", "player_ids": [str(ph.id)]},
+    )
+    assert resp.status_code == 400
