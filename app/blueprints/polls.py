@@ -3,6 +3,7 @@ from flask import (
     abort,
     flash,
     has_request_context,
+    make_response,
     redirect,
     render_template,
     request,
@@ -379,4 +380,9 @@ def poll_submit(token: str):
             success, message = submit_response(poll, option_ids, current_user.id)
 
     context = view_context(poll, current_user.id)
-    return render_template("_poll_widget.html", success=success, message=message, **context)
+    response = make_response(
+        render_template("_poll_widget.html", success=success, message=message, **context)
+    )
+    if success:
+        response.headers["HX-Trigger"] = "pollAnswered"  # the home page counts down its "N waiting"
+    return response

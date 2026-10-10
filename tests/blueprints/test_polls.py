@@ -245,8 +245,17 @@ def test_logged_in_user_sees_own_vote_highlighted(auth_client, app, db, open_pol
     assert resp.data.count(b"Your vote") == 1
 
 
+def test_answering_tells_the_page_to_count_down(auth_client, open_poll):
+    """HX-Trigger: pollAnswered lets the home page lower its "N polls waiting" line."""
+    option_id = open_poll.options[0].id
+    resp = auth_client.post(f"/poll/{open_poll.token}/respond", data={"option_ids": str(option_id)})
+    assert resp.headers.get("HX-Trigger") == "pollAnswered"
+    assert b"gn-check" in resp.data  # the drawn tick on the answer stamp
+
+
 def test_failed_submit_does_not_render_results(auth_client, open_poll):
     resp = auth_client.post(f"/poll/{open_poll.token}/respond", data={})
+    assert "HX-Trigger" not in resp.headers
     assert resp.status_code == 200
     assert b"your-vote" not in resp.data
     assert b"at least one option" in resp.data.lower()
