@@ -6,7 +6,7 @@ All notable changes to this project will be documented here.
 
 Migrations `t7u8v9w0x1y2` through `v9w0x1y2z3a4`; the entrypoint applies them on deploy. `u8c2u3n4i5q6` merges any duplicate players, results, votes, wishlist rows and nominations before adding unique constraints (its docstring lists exactly what it keeps); `v9w0x1y2z3a4` deletes result rows with neither a score nor a place.
 
-**After deploying:** run `flask badges recheck --dry-run` in the app container to see which existing awards the corrected rules would add or remove, then `flask badges recheck` to apply.
+**Before deploying:** run the read-only checks in the developer guide ("Before the first deploy of the October 2026 changes"). **After deploying:** run `flask badges recheck --dry-run` in the app container to see which existing awards the corrected rules would add or remove, then `flask badges recheck` to apply.
 
 ### Deploy
 - New `game_night_scheduler` container (same image, `command: ["scheduler"]`) runs the reminder job; the web container sets `ENABLE_SCHEDULER=false` and serves with 4 gthread threads instead of one sync worker. No new env vars; `docker compose up -d --build` starts both.
@@ -23,10 +23,10 @@ Migrations `t7u8v9w0x1y2` through `v9w0x1y2z3a4`; the entrypoint applies them on
 - Today's date follows `APP_TIMEZONE` everywhere (date polls, games, stats), not the container's UTC.
 - Reminder job: one bad night no longer stops the rest; a late start still runs. Poll share sends over one SMTP connection and names anyone who wasn't emailed.
 - Uploads are size-checked before decoding; files and rows stay in step when a save fails.
-- Security: login `next` can't leave the site; one password rule (8+ characters); reset links no longer carry part of the password hash; changing your password signs out other devices; sign-in and reset requests are rate-limited.
+- Security: login `next` can't leave the site; one password rule (8+ characters); reset links no longer carry part of the password hash; changing your password signs out other devices; sign-in and reset requests are rate-limited (per email from an address, so guessing can't lock the owner out); old temporary passwords can't sign in.
 
 ### Changed
-- Sign-up stays invite-only, but by signed invite link: admins (and hosts, for their guests) copy a link on the Admin page or `/invites`. Knowing someone's name is no longer enough to claim their account.
+- Sign-up stays invite-only, but by signed invite link: admins (and hosts, for guests who've only played at their nights) copy a link on the Admin page or `/invites`. A link stops working if its maker could no longer make it. Knowing someone's name is no longer enough to claim their account.
 - Closing voting leaves the RSVP poll open until the night is finalized.
 - The public recap no longer shows the night's notes.
 - Finalize lives at the bottom of "Games played" and only appears once the night has happened and a game has results.
