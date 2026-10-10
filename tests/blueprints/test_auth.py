@@ -65,13 +65,8 @@ def test_logout_redirects(auth_client):
 
 
 def test_signup_post_creates_user(client, db):
-    """Signup for a pre-created nameless person sets email+password and redirects."""
+    """Signup without an invite link makes a new person and redirects."""
     from app.models import Person
-
-    # Pre-create the person (as admin would do)
-    stub = Person(first_name="New", last_name="Signup")
-    _db.session.add(stub)
-    _db.session.commit()
 
     resp = client.post(
         "/signup",
@@ -86,11 +81,10 @@ def test_signup_post_creates_user(client, db):
     assert resp.status_code == 302
 
     person = Person.query.filter_by(email="newsignup@example.com").first()
-    assert person is not None
+    assert person is not None and person.first_name == "New"
 
     _db.session.rollback()
     Person.query.filter_by(email="newsignup@example.com").delete()
-    Person.query.filter_by(first_name="New", last_name="Signup", email=None).delete()
     _db.session.commit()
 
 

@@ -51,20 +51,30 @@ def logout():
 @auth_bp.route("/signup", methods=["GET", "POST"])
 @flash_if_no_action("Please provide all required fields to sign up.", "error")
 def signup():
-    if request.method == "POST":
-        first_name = request.form.get("first_name")
-        last_name = request.form.get("last_name")
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password")
+    """Sign up. From an invite link (?invite=...) this claims the person the
+    link was made for; otherwise it makes a new account."""
+    invite = request.values.get("invite") or None
+    invitee = auth_services.person_for_invite(invite) if invite else None
+    if invite and invitee is None:
+        flash(auth_services.INVITE_USED, "error")
+        return redirect(url_for("auth.signup"))
 
-        success, message = auth_services.signup(first_name, last_name, email, password)
+    form = {}
+    if request.method == "POST":
+        form = request.form
+        success, message = auth_services.signup(
+            form.get("first_name"),
+            form.get("last_name"),
+            form.get("email"),
+            form.get("password"),
+            invite=invite,
+        )
         flash(message, "success" if success else "error")
 
         if success:
             return redirect(url_for("auth.login"))
 
-    context = {}
-    return render_template("signup.html", **context)
+    return render_template("signup.html", invite=invite, invitee=invitee, form=form)
 
 
 @auth_bp.route("/forgot_password", methods=["GET", "POST"])

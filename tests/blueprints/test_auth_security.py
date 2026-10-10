@@ -226,3 +226,167 @@ def test_forgot_password_is_throttled_and_answers_the_same(
     answers.add(str(escape(auth_services.FORGOT_MESSAGE)) in resp.get_data(as_text=True))
     assert answers == {True}
     assert len(sent) == auth_services.FORGOT_EMAIL_LIMIT
+
+
+# --- Invite links --------------------------------------------------------------
+
+
+@pytest.fixture()
+def make_stub(db):
+    """Unclaimed people (name only, as Add Person / quick add make them)."""
+    from app.models import Person
+
+    made = []
+
+    def _make(first, last, **fields):
+        person = Person(first_name=first, last_name=last, **fields)
+        db.session.add(person)
+        db.session.commit()
+        made.append(person.id)
+        return person
+
+    yield _make
+    db.session.rollback()
+    for pid in made:
+        person = db.session.get(Person, pid)
+        if person is not None:
+            db.session.delete(person)
+    db.session.commit()
+
+
+def _signup(client, invite=None, **fields):
+    data = {
+        "first_name": "Someone",
+        "last_name": "Else",
+        "email": "someone.else@test.invalid",
+        "password": "good-password",
+    }
+    data.update(fields)
+    if invite:
+        data["invite"] = invite
+    return client.post("/signup", data=data, follow_redirects=True)
+
+
+def _cleanup_email(db, email):
+    from app.models import Person
+
+    db.session.rollback()
+    for person in Person.query.filter_by(email=email).all():
+        db.session.delete(person)
+    db.session.commit()
+
+
+def test_signup_by_name_never_claims_an_existing_person(client, db, make_stub):
+    stub = make_stub("Claimable", "Admin", admin=True)
+    resp = _signup(client, first_name="claimable", last_name="ADMIN")
+    assert b"invite link" in resp.data
+    assert stub.email is None and stub.password is None
+    from app.models import Person
+
+    assert Person.query.filter_by(email="someone.else@test.invalid").count() == 0
+
+
+def test_signup_without_invite_creates_a_new_member(client, db):
+    from app.models import Person
+
+    try:
+        resp = _signup(client, first_name="Brand", last_name="Newcomer")
+        assert b"You can now log in" in resp.data
+        person = Person.query.filter_by(email="someone.else@test.invalid").one()
+        assert (person.first_name, person.last_name) == ("Brand", "Newcomer")
+        assert not (person.admin or person.owner or person.can_host)
+    finally:
+        _cleanup_email(db, "someone.else@test.invalid")
+
+
+def _invite_from(page):
+    import re
+
+    match = re.search(r'value="(http://localhost/signup\?invite=[^"]+)"', page)
+    assert match, "no invite link on the page"
+    return match.group(1).split("invite=", 1)[1]
+
+
+def test_invite_link_claims_that_person_with_their_rights(admin_client, db, make_stub):
+    stub = make_stub("Invited", "Admin", admin=True, can_host=True)
+    token = _invite_from(admin_client.get("/admin").get_data(as_text=True))
+    admin_client.post("/logout")
+    client = admin_client
+    try:
+        page = client.get(f"/signup?invite={token}").get_data(as_text=True)
+        assert 'value="Invited"' in page and 'value="Admin"' in page
+
+        resp = _signup(client, invite=token, first_name="Not", last_name="Me")
+        assert b"You can now log in" in resp.data
+        db.session.refresh(stub)
+        assert stub.email == "someone.else@test.invalid"
+        assert (stub.first_name, stub.admin, stub.can_host) == ("Invited", True, True)
+
+        # Used up: the person is claimed now
+        resp = client.get(f"/signup?invite={token}", follow_redirects=True)
+        assert b"expired or was already used" in resp.data
+        resp = _signup(client, invite=token, email="second@test.invalid")
+        assert b"expired or was already used" in resp.data
+    finally:
+        _cleanup_email(db, "someone.else@test.invalid")
+
+
+def test_invite_links_expire_and_cannot_be_forged(client, db, make_stub, monkeypatch):
+    from app.services import auth_services
+
+    stub = make_stub("Expiring", "Invite")
+    token = auth_services.make_invite_token(stub)
+    assert auth_services.person_for_invite(token) == stub
+    assert auth_services.person_for_invite(token[:-2] + "xx") is None
+    assert auth_services.person_for_invite("garbage") is None
+    monkeypatch.setattr(auth_services, "INVITE_MAX_AGE", -1)
+    assert auth_services.person_for_invite(token) is None
+
+
+def test_deactivating_someone_voids_their_old_invite(db, make_stub, make_person, make_night):
+    from app.services import admin_services, auth_services
+
+    stub, adm = make_stub("Gone", "ForNow"), make_person("Adm", admin=True)
+    make_night(stub)
+    token = auth_services.make_invite_token(stub)
+    admin_services.remove_user(stub.id, adm.id)
+    admin_services.restore_user(stub.id)
+    assert auth_services.person_for_invite(token) is None
+    assert auth_services.person_for_invite(auth_services.make_invite_token(stub)) == stub
+
+
+def test_who_can_invite(db, make_stub, make_person, make_night):
+    from app.services.auth_services import can_invite
+
+    adm, member = make_person("Adm", admin=True), make_person("Mem")
+    host = make_person("Hoster")
+    host.can_host = True
+    guest, stranger = make_stub("Guest", "OfHost"), make_stub("Not", "TheirGuest")
+    vip = make_stub("Made", "Admin", admin=True)
+    make_night(guest, vip, host_id=host.id)
+    make_night(stranger)
+
+    assert can_invite(adm, guest) and can_invite(adm, stranger) and can_invite(adm, vip)
+    assert can_invite(host, guest)
+    assert not can_invite(host, stranger)  # not on a night they host
+    assert not can_invite(host, vip)  # admin rights come from an admin's link only
+    assert not can_invite(member, guest)
+    assert not can_invite(adm, member)  # already signed up
+
+
+def test_hosts_get_invite_links_for_their_guests(client, db, make_stub, make_person, make_night):
+    host = make_person("Hoster")
+    host.can_host = True
+    guest, stranger = make_stub("Guest", "OfHost"), make_stub("Not", "TheirGuest")
+    make_night(guest, host_id=host.id)
+    make_night(stranger)
+    login(client, host)
+    page = client.get("/invites").get_data(as_text=True)
+    assert "Guest OfHost" in page and "TheirGuest" not in page
+    from app.services.auth_services import person_for_invite
+
+    assert person_for_invite(_invite_from(page)) == guest
+
+    member = make_person("Mem")
+    login(client, member)
+    assert client.get("/invites").status_code == 302

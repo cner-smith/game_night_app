@@ -81,43 +81,138 @@ def login(email, password, ip=None):
     return False, "Invalid email or password.", None
 
 
-def signup(first_name, last_name, email, password):
-    """Complete signup for a pre-created user by setting email and password."""
-    email = email.strip().lower()
-    first_name = first_name.strip().lower()
-    last_name = last_name.strip().lower()
+INVITE_MAX_AGE = 14 * 24 * 60 * 60  # invite links work for two weeks
+INVITE_USED = "That invite link has expired or was already used. Ask for a new one."
 
+
+def _invite_serializer():
+    from flask import current_app
+    from itsdangerous import URLSafeTimedSerializer
+
+    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="person-invite")
+
+
+def _invite_fingerprint(person):
+    # Deactivating someone gives them a new session token, which also voids
+    # invites sent before, so restoring them doesn't revive old links.
+    return hashlib.sha256((person.session_token or "").encode("utf-8")).hexdigest()[:16]
+
+
+def make_invite_token(person):
+    return _invite_serializer().dumps({"id": person.id, "st": _invite_fingerprint(person)})
+
+
+def invite_link(person):
+    from flask import url_for
+
+    return url_for("auth.signup", invite=make_invite_token(person), _external=True)
+
+
+def person_for_invite(token):
+    """The unclaimed person an invite link is for, or None if the link is
+    bad, expired, or already used (the person has signed up since)."""
+    from itsdangerous import BadSignature, SignatureExpired
+
+    try:
+        data = _invite_serializer().loads(token, max_age=INVITE_MAX_AGE)
+    except (BadSignature, SignatureExpired):
+        return None
+    if not isinstance(data, dict) or not isinstance(data.get("id"), int):
+        return None
+    person = db.session.get(Person, data["id"])
+    if person is None or not person.active or person.email or person.password:
+        return None
+    if _invite_fingerprint(person) != data.get("st"):
+        return None
+    return person
+
+
+def can_invite(user, person):
+    """Admins can invite anyone who hasn't signed up. Hosts can invite
+    unclaimed people who play on a night they host, unless an admin has given
+    that person rights (only an admin's link should hand those over)."""
+    from app.models import GameNight, Player
+
+    if person is None or not person.active or person.email or person.password or person.owner:
+        return False
+    if user.admin or user.owner:
+        return True
+    if not user.can_host or person.admin or person.can_host:
+        return False
+    return (
+        db.session.query(Player.id)
+        .join(GameNight, GameNight.id == Player.game_night_id)
+        .filter(Player.people_id == person.id, GameNight.host_id == user.id)
+        .first()
+        is not None
+    )
+
+
+def invitable_people(user):
+    """Unclaimed people this user can send an invite link to."""
+    unclaimed = (
+        Person.query.filter(
+            Person.active.is_(True), Person.email.is_(None), Person.password.is_(None)
+        )
+        .order_by(Person.last_name, Person.first_name)
+        .all()
+    )
+    return [p for p in unclaimed if can_invite(user, p)]
+
+
+def signup(first_name, last_name, email, password, invite=None):
+    """Create an account. With an invite link, claim that (unclaimed) person,
+    keeping any rights an admin gave them. Without one, always a new person:
+    a name never attaches to someone who's already here."""
+    email = (email or "").strip().lower()
+    first_name, last_name = (first_name or "").strip(), (last_name or "").strip()
+
+    person = None
+    if invite:
+        person = person_for_invite(invite)
+        if person is None:
+            return False, INVITE_USED
+    elif not first_name or not last_name:
+        return False, "Enter your first and last name."
+    if not email or "@" not in email:
+        return False, "Enter a valid email address."
     problem = password_problem(password)
     if problem:
         return False, problem
-
-    # Email already taken by any user
     if Person.query.filter(func.lower(Person.email) == email).first():
-        return False, "An account with this email already exists."
-
-    # Try to find a matching person by name
-    user = (
-        Person.query.filter_by(active=True)
-        .filter(func.lower(Person.first_name) == first_name)
-        .filter(func.lower(Person.last_name) == last_name)
-        .first()
-    )
-
-    if not user:
-        return False, "No matching user found with that name. Please contact an admin."
-
-    if user.email or user.password:
         return (
             False,
-            "This user has already completed signup. Please use the forgot password or contact an admin.",
+            "An account with this email already exists. Sign in, or reset your password.",
         )
 
-    # Set email and password
-    user.email = email
-    user.password = hash_password(password)
+    if person is None:
+        namesake = Person.query.filter(
+            func.lower(Person.first_name) == first_name.lower(),
+            func.lower(Person.last_name) == last_name.lower(),
+        ).first()
+        if namesake is not None:
+            if not namesake.active:
+                return False, (
+                    f"{namesake.full_name} was removed from the site. If that's you, ask an "
+                    "admin to restore you and send you an invite link."
+                )
+            if not namesake.email:
+                return False, (
+                    f"{namesake.full_name} is already on the list here. If that's you, ask "
+                    "an admin or your host for your invite link and sign up from it."
+                )
+            return False, (
+                f"Someone called {namesake.full_name} already has an account. If that's "
+                "you, sign in or reset your password; if not, add a middle initial."
+            )
+        person = Person(first_name=first_name, last_name=last_name)
+        db.session.add(person)
+
+    person.email = email
+    person.password = hash_password(password)
     db.session.commit()
 
-    return True, "Signup completed successfully! You can now log in."
+    return True, "You're signed up! You can now log in."
 
 
 RESET_MAX_AGE = 60 * 60  # reset links work for an hour

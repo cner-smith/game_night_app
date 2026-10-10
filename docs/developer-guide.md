@@ -251,6 +251,8 @@ Always review the auto-generated migration before applying it — Alembic someti
                                                                                        └─ q4r5s6t7u8v9  remove_votes_for_unnominated_games
                                                                                             └─ r5s6t7u8v9w0  night_hosts
                                                                                                  └─ s6t7u8v9w0x1  night_address
+                                                                                                      └─ t7u8v9w0x1y2  badge_rules_match_checks
+                                                                                                           └─ u8v9w0auth01  session_tokens_and_auth_throttle
 ```
 
 ### Existing Production Database (Brownfield Setup)
@@ -271,17 +273,24 @@ The app uses 9 PostgreSQL views for performance (e.g., `GameNightRankings`, `Gam
 
 ## User Management
 
-The app uses **invite-only signup**. A new user cannot register themselves — an admin must create their account first.
+People are added by name first (so they can be put on nights before they have an account), then claim that person with a personal **invite link**. Anyone can also sign up from `/signup` without a link, but that always creates a *new* person: typing a name never attaches to someone already on the site (a name clash gets a friendly "ask for your invite link" message instead).
 
 ### Adding a New User
 
 1. Log in as an admin
-2. Go to **Admin → Add Person**
-3. Enter the person's first and last name
-4. The system creates a `Person` record with a temporary password
-5. Send the person the app URL — they sign up using their name to claim the account
+2. Go to **Admin → Add Person** and enter their first and last name
+3. On the Admin page, their row says *Not signed up yet* with **Copy invite link**
+4. Send them the link; it opens sign-up prefilled as that person and they add an email and password
 
-Hosts can also add someone by name from the start/edit night form (**Not on the site? Add them**, `POST /people/quick_add`); that person claims the account the same way.
+Invite links are signed with `SECRET_KEY` (`itsdangerous`, salt `person-invite`), last 14 days, and stop working once the person has signed up or has been deactivated (the link includes a digest of `people.session_token`, which deactivation changes). Whatever rights an admin gave the person (admin, Can host) carry over when they claim it.
+
+Hosts can also add someone by name from the start/edit night form (**Not on the site? Add them**, `POST /people/quick_add`). Hosts get invite links for unclaimed guests on nights they host from **Profile → Invite people** (`/invites`), but not for anyone an admin has given rights to.
+
+### Sign-in security
+
+- One password rule everywhere (`auth_services.password_problem`): 8+ characters, at most 72 bytes (bcrypt's limit).
+- `Person.get_id()` returns `"<id>:<session_token>"` (Flask-Login's alternative token). Changing or resetting a password, or deactivating someone, sets a new token, which logs out their other sessions; the session that changed the password is logged back in.
+- Failed sign-ins (per email and per client address) and reset requests are counted in `auth_throttle`, so the limits hold across workers. Tests turn this off with `AUTH_THROTTLE = False`.
 
 **Removing** someone who has played deactivates them (`people.active = false`) so their results and stats stay; people with no history are deleted.
 
