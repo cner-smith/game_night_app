@@ -108,6 +108,9 @@ def create_app(config_class=None):
     init_extensions(app)
     register_user_loader(app)
     register_blueprints(app)
+    from app.utils.errors import register_error_handlers
+
+    register_error_handlers(app)
     from app.cli import badges_cli
 
     app.cli.add_command(badges_cli)

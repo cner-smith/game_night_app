@@ -23,6 +23,7 @@ from decimal import Decimal, InvalidOperation
 from app.extensions import db
 from app.models import FOOD_MODES, FoodExpense, FoodExpenseShare, FoodItem, Person, Player
 from app.services import media_services, payment_services, poll_services
+from app.services.errors import ServiceError
 
 FOOD_MODE_LABELS = {
     "none": "No food plans",
@@ -33,7 +34,7 @@ FOOD_MODE_LABELS = {
 }
 
 
-class FoodError(ValueError):
+class FoodError(ServiceError, ValueError):
     pass
 
 
