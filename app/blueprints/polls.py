@@ -12,7 +12,7 @@ from flask import (
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.services import date_poll_services
+from app.services import date_poll_services, notifications, poll_services
 from app.services.poll_services import (
     can_manage,
     can_view,
@@ -51,14 +51,6 @@ def inject_active_polls():
         current_app.logger.exception("Couldn't count open polls for the nav")
         db.session.rollback()
         return {"active_polls_count": 0}
-
-
-def _linkable_nights():
-    """Nights a poll can be linked to: not finalized, and ones you run."""
-    from app.models import GameNight
-
-    nights = GameNight.query.filter_by(final=False).order_by(GameNight.date.desc()).all()
-    return [n for n in nights if n.managed_by(current_user)]
 
 
 def _managed_poll(poll_id: int):
@@ -103,12 +95,7 @@ def _night_ok(night_id: int | None, nights) -> bool:
 @login_required
 @host_required
 def poll_list():
-    from app.models import Poll
-
-    polls = [
-        p for p in Poll.query.order_by(Poll.created_at.desc()).all() if can_manage(p, current_user)
-    ]
-    return render_template("poll_list.html", polls=polls)
+    return render_template("poll_list.html", polls=poll_services.polls_managed_by(current_user))
 
 
 @polls_bp.route("/polls/<int:poll_id>/results")
@@ -131,10 +118,8 @@ def poll_results(poll_id: int):
 @login_required
 @host_required
 def poll_create():
-    from app.models import Person
-
-    people = Person.query.filter_by(active=True).order_by(Person.first_name).all()
-    nights = _linkable_nights()
+    people = poll_services.invitable_people()
+    nights = poll_services.linkable_nights(current_user)
     form = request.form
 
     def page(error=None):
@@ -193,11 +178,9 @@ def poll_create():
 @polls_bp.route("/polls/<int:poll_id>/edit", methods=["GET", "POST"])
 @login_required
 def poll_edit(poll_id: int):
-    from app.models import Person
-
     poll = _managed_poll(poll_id)
-    people = Person.query.filter_by(active=True).order_by(Person.first_name).all()
-    nights = _linkable_nights()
+    people = poll_services.invitable_people()
+    nights = poll_services.linkable_nights(current_user)
     if poll.game_night and poll.game_night not in nights:
         nights.insert(0, poll.game_night)
 
@@ -278,54 +261,23 @@ def poll_pick_date(poll_id: int, option_id: int):
 @polls_bp.route("/polls/<int:poll_id>/close", methods=["POST"])
 @login_required
 def poll_close(poll_id: int):
-    poll = _managed_poll(poll_id)
-    poll.closed = True
-    db.session.commit()
+    poll_services.close_poll(_managed_poll(poll_id))
     return redirect(url_for("polls.poll_list"))
 
 
 @polls_bp.route("/polls/<int:poll_id>/delete", methods=["POST"])
 @login_required
 def poll_delete(poll_id: int):
-    poll = _managed_poll(poll_id)
-    db.session.delete(poll)
-    db.session.commit()
+    poll_services.delete_poll(_managed_poll(poll_id))
     flash("Poll deleted.", "success")
     return redirect(url_for("polls.poll_list"))
-
-
-def _share_body(poll, person, poll_url: str) -> str:
-    return (
-        f"Hi {person.first_name},\n\n"
-        + (
-            f"Help pick a date for the next game night: {poll.title}\n"
-            if poll.date_poll
-            else f"There's a Game Night poll for you: {poll.title}\n"
-        )
-        + (f"{poll.description}\n" if poll.description else "")
-        + ("\nSay which dates work for you here:\n" if poll.date_poll else "\nAnswer it here:\n")
-        + f"{poll_url}\n\n"
-        "You'll be asked to sign in first. Forgot your password? "
-        "The sign-in page has a reset link.\n\n"
-        "— Game Night"
-    )
 
 
 @polls_bp.route("/polls/<int:poll_id>/share", methods=["GET", "POST"])
 @login_required
 def poll_share(poll_id: int):
-    from flask_mail import Message
-
-    from app.extensions import mail
-    from app.models import Person
-
     poll = _managed_poll(poll_id)
-    people = (
-        Person.query.filter(Person.email.isnot(None), Person.active.is_(True))
-        .order_by(Person.first_name)
-        .all()
-    )
-    unclaimed = Person.query.filter(Person.email.is_(None), Person.active.is_(True)).count()
+    people, unclaimed = poll_services.share_recipients()
     poll_url = request.host_url.rstrip("/") + url_for("polls.poll_respond", token=poll.token)
 
     if request.method == "POST":
@@ -337,28 +289,8 @@ def poll_share(poll_id: int):
             )
 
         recipients = [p for p in people if str(p.id) in selected_ids]
-        # One SMTP session for the whole batch (Flask-Mail's bulk recipe,
-        # mail.connect()), not a connect + TLS + login per person. A failed
-        # address doesn't stop the rest, and the flash names whoever didn't
-        # get it so a retry can select just them.
-        sent_ids: set[int] = set()
-        try:
-            with mail.connect() as conn:
-                for person in recipients:
-                    try:
-                        conn.send(
-                            Message(
-                                subject=f"Game Night Poll: {poll.title}",
-                                recipients=[person.email],
-                                body=_share_body(poll, person, poll_url),
-                            )
-                        )
-                        sent_ids.add(person.id)
-                    except Exception:
-                        current_app.logger.exception("Poll share email to %s failed", person.email)
-        except Exception:  # couldn't connect or log in (or quit) at all
-            current_app.logger.exception("Poll share: SMTP session failed")
-
+        # The flash names whoever didn't get it so a retry can select just them.
+        sent_ids = notifications.send_poll_invites(poll, recipients, poll_url)
         failed = [p for p in recipients if p.id not in sent_ids]
         if sent_ids:
             n = len(sent_ids)

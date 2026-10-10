@@ -181,6 +181,50 @@ def availability_title(date) -> str:
     return f"Availability — Game Night {date.strftime('%B %-d, %Y')}"
 
 
+def polls_managed_by(user) -> list[Poll]:
+    """Every poll this user can manage, newest first (the poll list)."""
+    return [p for p in Poll.query.order_by(Poll.created_at.desc()).all() if can_manage(p, user)]
+
+
+def linkable_nights(user) -> list:
+    """Nights a poll can be linked to: not finalized, and ones this user runs."""
+    from app.models import GameNight
+
+    nights = GameNight.query.filter_by(final=False).order_by(GameNight.date.desc()).all()
+    return [n for n in nights if n.managed_by(user)]
+
+
+def invitable_people() -> list:
+    """Active people by first name, for a private poll's invitee picker."""
+    from app.models import Person
+
+    return Person.query.filter_by(active=True).order_by(Person.first_name).all()
+
+
+def share_recipients() -> tuple[list, int]:
+    """(active people with an email, by first name; how many active people
+    have no email yet and so can't be sent a poll)."""
+    from app.models import Person
+
+    people = (
+        Person.query.filter(Person.email.isnot(None), Person.active.is_(True))
+        .order_by(Person.first_name)
+        .all()
+    )
+    unclaimed = Person.query.filter(Person.email.is_(None), Person.active.is_(True)).count()
+    return people, unclaimed
+
+
+def close_poll(poll: Poll) -> None:
+    poll.closed = True
+    db.session.commit()
+
+
+def delete_poll(poll: Poll) -> None:
+    db.session.delete(poll)
+    db.session.commit()
+
+
 def get_poll_by_token(token: str) -> Poll | None:
     """Fetch a poll by its shareable token."""
     return Poll.query.filter_by(token=token).first()
