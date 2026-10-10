@@ -257,6 +257,7 @@ Always review the auto-generated migration before applying it — Alembic someti
                                                                                                                      └─ u8c3v4i5e6w7  drop_unused_night_list_views
                                                                                                                           └─ u8c4r5a6n7k8  rankings_count_every_place
                                                                                                                                └─ u8v9w0auth01  session_tokens_and_auth_throttle
+                                                                                                                                    └─ v9w0x1y2z3a4  drop_blank_results
 ```
 
 ### Existing Production Database (Brownfield Setup)
