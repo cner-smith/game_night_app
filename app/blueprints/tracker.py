@@ -12,6 +12,7 @@ from flask import (
 )
 from flask_login import current_user, login_required
 
+from app.extensions import db
 from app.models import (  # noqa: F401
     GameNightGame,
     Player,
@@ -25,7 +26,7 @@ tracker_bp = Blueprint("tracker", __name__)
 
 
 def _get_session_or_404(session_id):
-    session = TrackerSession.query.get(session_id)
+    session = db.session.get(TrackerSession, session_id)
     if session is None:
         abort(404)
     return session
@@ -70,7 +71,7 @@ def _assert_gng_participant_or_admin(gng):
 @tracker_bp.route("/game_night/<int:gng_id>/tracker/new")
 @login_required
 def setup_tracker(gng_id):
-    gng = GameNightGame.query.get_or_404(gng_id)
+    gng = db.get_or_404(GameNightGame, gng_id)
     gn = gng.game_night
     _assert_gng_participant_or_admin(gng)
     if gn.final:
@@ -112,7 +113,7 @@ def setup_tracker(gng_id):
 @tracker_bp.route("/game_night/<int:gng_id>/tracker", methods=["POST"])
 @login_required
 def launch_tracker(gng_id):
-    gng = GameNightGame.query.get_or_404(gng_id)
+    gng = db.get_or_404(GameNightGame, gng_id)
     _assert_gng_participant_or_admin(gng)
 
     session_id = _int_or_none(request.form.get("session_id"))
@@ -264,7 +265,7 @@ def update_value(session_id):
         )
     except ValueError as e:
         return str(e), 400
-    field = TrackerField.query.get(field_id)
+    field = db.session.get(TrackerField, field_id)
     return render_template(
         "_tracker_cell.html",
         tv=tv,

@@ -125,7 +125,7 @@ def start_game_night(
 
 def get_game_night_details(game_night_id):
     """Retrieve game night details and attendees."""
-    game_night = GameNight.query.get_or_404(game_night_id)
+    game_night = db.get_or_404(GameNight, game_night_id)
     current_attendees = {p.people_id for p in game_night.players}
     people = get_all_people()
     listed = {p.id for p in people}
@@ -138,7 +138,7 @@ def edit_game_night(
     game_night_id, date_str, notes, attendees_ids, food=None, host_id=None, address=None
 ):
     """Edit an existing game night. host_id (admins only) changes the host."""
-    game_night = GameNight.query.get_or_404(game_night_id)
+    game_night = db.get_or_404(GameNight, game_night_id)
 
     date = parse_date(date_str)
     if not date:
@@ -190,7 +190,7 @@ def clear_past_addresses(today):
 
 
 def delete_game_night(game_night_id):
-    game_night = GameNight.query.get(game_night_id)
+    game_night = db.session.get(GameNight, game_night_id)
     if not game_night:
         return False, "Game night not found."
 
@@ -217,7 +217,7 @@ def manage_game_in_night(
     game_night_id, game_id, action="add", round_number=None, game_night_game_id=None
 ):
     """Add or remove a game from a game night."""
-    game_night = GameNight.query.get_or_404(game_night_id)
+    game_night = db.get_or_404(GameNight, game_night_id)
     try:
         night_policy.require_editable(game_night)
     except night_policy.NightRuleError as e:
@@ -291,7 +291,7 @@ def log_results(game_night_id, game_night_game_id, scores_positions):
     """Log results for a game night game. Returns (success, message);
     a malformed body or a player from another night changes nothing."""
     GameNightGame.query.filter_by(game_night_id=game_night_id, id=game_night_game_id).first_or_404()
-    game_night = GameNight.query.get_or_404(game_night_id)
+    game_night = db.get_or_404(GameNight, game_night_id)
     try:
         night_policy.require_editable(game_night)
         parsed = _parse_results(game_night, scores_positions)
@@ -333,7 +333,7 @@ def toggle_game_night_field(game_night_id, field):
     if field not in _TOGGLEABLE_FIELDS:
         return False, "Invalid field."
 
-    game_night = GameNight.query.get_or_404(game_night_id)
+    game_night = db.get_or_404(GameNight, game_night_id)
     setattr(game_night, field, not getattr(game_night, field))
     if game_night.closed:
         # Closing voting closes the night's linked polls too.
@@ -413,14 +413,14 @@ def determine_top_places(game_night_id):
 
 def get_game_night_by_id(game_night_id):
     """Retrieve a game night by ID or return 404 if not found."""
-    return GameNight.query.get_or_404(game_night_id)
+    return db.get_or_404(GameNight, game_night_id)
 
 
 def get_view_game_night_details(game_night_id, current_user_id):
     """Fetch all necessary data for viewing a game night using optimized SQL views."""
 
     # Fetch Game Night
-    game_night = GameNight.query.get_or_404(game_night_id)
+    game_night = db.get_or_404(GameNight, game_night_id)
 
     # Fetch and sort players alphabetically
     players = sorted(
@@ -581,7 +581,7 @@ def night_badges(game_night_id):
 
 def get_recap_details(game_night_id):
     """Fetch data for the public game night recap page."""
-    game_night = GameNight.query.get_or_404(game_night_id)
+    game_night = db.get_or_404(GameNight, game_night_id)
 
     if not game_night.final:
         abort(404)

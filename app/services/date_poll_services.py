@@ -13,6 +13,7 @@ from datetime import date, datetime, timedelta
 from app.extensions import db
 from app.models import GameNight, Player, Poll, PollOption, PollResponse
 from app.services import poll_services
+from app.utils.dates import local_today
 
 ANSWERS = ("yes", "maybe", "no")
 ANSWER_LABELS = {"yes": "Yes", "maybe": "If needed", "no": "No"}
@@ -145,7 +146,7 @@ def summary(poll: Poll) -> list[dict]:
                 "maybe": people["maybe"],
                 "no": people["no"],
                 "score": (len(people["yes"]), len(people["yes"]) + len(people["maybe"])),
-                "past": option.option_date is not None and option.option_date < date.today(),
+                "past": option.option_date is not None and option.option_date < local_today(),
             }
         )
     best = max((r["score"] for r in rows if r["score"][1] > 0), default=None)

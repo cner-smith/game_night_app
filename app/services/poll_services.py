@@ -122,7 +122,7 @@ def create_availability_poll(game_night_id: int, user_id: int) -> tuple[bool, st
     """Create the night's Can/Maybe/Can't poll. Its answers are the RSVPs."""
     from app.models import GameNight
 
-    gn = GameNight.query.get_or_404(game_night_id)
+    gn = db.get_or_404(GameNight, game_night_id)
     if gn.availability_poll is not None:
         return False, "This game night already has an availability poll."
     poll = create_poll(

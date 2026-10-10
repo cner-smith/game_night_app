@@ -14,7 +14,7 @@ VALID_RANKS = {1, 2, 3}
 def _voting_error(game_night_id):
     """Why nominating or ranking isn't allowed right now, or None."""
     try:
-        night_policy.require_voting_open(GameNight.query.get_or_404(game_night_id))
+        night_policy.require_voting_open(db.get_or_404(GameNight, game_night_id))
     except night_policy.NightRuleError as e:
         return str(e)
     return None

@@ -52,7 +52,7 @@ def get_or_create_configuring_session(game_night_game_id):
 
 def discard_session(session_id):
     """Delete a tracker session and all its children (cascade handles FK children)."""
-    session = TrackerSession.query.get(session_id)
+    session = db.session.get(TrackerSession, session_id)
     if session:
         db.session.delete(session)
         db.session.commit()
@@ -60,7 +60,7 @@ def discard_session(session_id):
 
 def add_field(session_id, *, type, label, starting_value=0, is_score_field=False):
     """Add a TrackerField to a configuring session. Does not seed values yet."""
-    session = TrackerSession.query.get(session_id)
+    session = db.session.get(TrackerSession, session_id)
     if session is None or session.status != "configuring":
         raise ValueError("Fields can only be added to a session in 'configuring' status")
     if type not in VALID_FIELD_TYPES:
@@ -109,7 +109,7 @@ def launch_session(session_id, *, mode, teams_data, player_ids, field_order=None
     player_ids: list of Player.id — all players for the game night (individual mode)
     field_order: list of TrackerField.id in desired sort order (optional)
     """
-    session = TrackerSession.query.get_or_404(session_id)
+    session = db.get_or_404(TrackerSession, session_id)
     if session.status != "configuring":
         raise ValueError("Only sessions in 'configuring' status can be launched")
     night_policy.require_editable(session.game_night_game.game_night)
@@ -177,7 +177,7 @@ def update_value(session_id, field_id, *, entity_type, entity_id=None, delta=Non
     delta: integer increment/decrement for counter fields (clamped to ±100)
     value: new string value for checkbox/notes fields
     """
-    session = TrackerSession.query.get(session_id)
+    session = db.session.get(TrackerSession, session_id)
     if session is None or session.status != "active":
         raise ValueError("Values can only be updated for sessions in 'active' status")
     night_policy.require_editable(session.game_night_game.game_night)
@@ -279,7 +279,7 @@ def save_results(session_id, positions=None):
     In team mode, all team members get the team's position and score.
     Marks session status = "completed".
     """
-    session = TrackerSession.query.get(session_id)
+    session = db.session.get(TrackerSession, session_id)
     if session is None:
         raise ValueError(f"TrackerSession {session_id} not found")
     if session.status != "active":

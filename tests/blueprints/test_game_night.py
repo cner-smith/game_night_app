@@ -112,7 +112,7 @@ def test_finalize_succeeds_even_if_badge_evaluation_raises(admin_client, app, db
 
     from app.models import GameNight as GN
 
-    updated = GN.query.get(gn_id)
+    updated = _db.session.get(GN, gn_id)
     assert (
         updated.final is True
     ), "Game night must be marked final even when badge evaluation raises"
@@ -151,7 +151,7 @@ def test_toggle_invalid_field_is_rejected(admin_client, app, db):
     # Confirm id was not modified
     from app.models import GameNight as GN
 
-    fresh = GN.query.get(gn_id)
+    fresh = _db.session.get(GN, gn_id)
     assert fresh.id == gn_id
 
     Player.query.filter_by(id=pl_id).delete()
@@ -187,7 +187,7 @@ def test_toggle_closed_auto_closes_availability_poll(admin_client, app, db):
 
     from app.models import Poll
 
-    refreshed = Poll.query.get(poll_id)
+    refreshed = _db.session.get(Poll, poll_id)
     assert refreshed.closed is True, "Availability poll must auto-close when voting closes"
 
     from app.models import PollOption, PollResponse
