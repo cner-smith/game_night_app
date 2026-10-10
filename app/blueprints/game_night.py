@@ -51,13 +51,13 @@ def start_game_night():
                 food,
                 host_id=current_user.id,
                 address=form.get("address"),
+                rsvp_poll=bool(form.get("rsvp_poll")),
             )
         except ServiceError as e:
             flash(str(e), "error")  # stay on the form
         else:
             message = "Game night started."
             if form.get("rsvp_poll"):
-                poll_services.create_availability_poll(game_night.id, current_user.id)
                 message = "Game night started. Players can RSVP on its page."
             flash(message, "success")
             return redirect(url_for("game_night.view_game_night", game_night_id=game_night.id))
@@ -296,9 +296,13 @@ def delete_game_night(game_night_id):
 @login_required
 @night_manager_required
 def create_availability_poll(game_night_id):
-    success, message = poll_services.create_availability_poll(game_night_id, current_user.id)
-    flash(message, "success" if success else "error")
-    return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id) + "#polls")
+    polls_url = url_for("game_night.view_game_night", game_night_id=game_night_id) + "#polls"
+    try:
+        message = poll_services.create_availability_poll(game_night_id, current_user.id)
+    except ServiceError as e:
+        return service_error_response(e, redirect_to=polls_url)
+    flash(message, "success")
+    return redirect(polls_url)
 
 
 @game_night_bp.route("/game_night/<int:game_night_id>/recap")

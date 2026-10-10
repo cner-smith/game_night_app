@@ -106,10 +106,17 @@ def _in_a_tracker(player_id):
 
 
 def start_game_night(
-    date_str, notes, attendees_ids, food=("none", None, None), host_id=None, address=None
+    date_str,
+    notes,
+    attendees_ids,
+    food=("none", None, None),
+    host_id=None,
+    address=None,
+    rsvp_poll=False,
 ):
-    """Create a new game night and add attendees. Returns the night;
-    raises ServiceError (saving nothing) on a bad date or attendee list."""
+    """Create a new game night with its attendees (and, with rsvp_poll, its
+    availability poll) in one commit. Returns the night; raises ServiceError
+    (saving nothing) on a bad date or attendee list."""
     date = parse_date(date_str)
     if not date:
         raise ServiceError("Invalid date format. Please use YYYY-MM-DD.")
@@ -121,6 +128,8 @@ def start_game_night(
 
     try:
         manage_attendees(game_night, attendees_ids)
+        if rsvp_poll:
+            poll_services.add_availability_poll(game_night, host_id)
     except ServiceError:
         db.session.rollback()
         raise

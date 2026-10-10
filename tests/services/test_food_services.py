@@ -55,7 +55,7 @@ def test_signup_list_claims(make_person, make_night):
 def test_split_cost_defaults_to_rsvp_in_and_tracks_payment(make_person, make_night):
     ann, bo, cy = make_person("Ann"), make_person("Bo"), make_person("Cy")
     gn = make_night(ann, bo, cy, food_mode="split")
-    ok, _ = create_availability_poll(gn.id, ann.id)
+    create_availability_poll(gn.id, ann.id)
     poll = gn.availability_poll
     submit_response(poll, [poll.options[0].id], ann.id)  # can make it
     submit_response(poll, [poll.options[0].id], bo.id)  # can make it

@@ -78,7 +78,8 @@ def create_date_poll(
     private: bool = False,
     invitee_ids: list[int] | None = None,
 ) -> Poll:
-    poll = poll_services.create_poll(
+    """The poll, its options and their dates are saved in one commit."""
+    poll = poll_services.add_poll(
         title,
         description,
         [label_for(d) for d in dates],
@@ -183,11 +184,11 @@ def pick_date(poll: Poll, option_id: int, admin_id: int) -> tuple[bool, str, Gam
         db.session.add(Player(game_night_id=night.id, people_id=person_id))
     poll.closed = True
     poll.picked_game_night_id = night.id
-    db.session.commit()
 
-    poll_services.create_availability_poll(night.id, admin_id)
-    rsvp = night.availability_poll
-    by_label = {o.label: o.id for o in rsvp.options}
+    # The night, its players, its RSVP poll and the carried-over answers are
+    # one commit: a failure part-way leaves the date poll unpicked.
+    rsvp = poll_services.add_availability_poll(night, admin_id)
+    by_label = {o.label: o.id for o in rsvp.options}  # type: ignore[attr-defined]
     for person_id, answer in answers.items():
         label = "Can Make It" if answer == "yes" else "Maybe"
         db.session.add(
