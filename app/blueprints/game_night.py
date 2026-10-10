@@ -206,7 +206,12 @@ def log_results(game_night_id, game_night_game_id):
         flash(message, "success")
         # The page posts with fetch; answer with where to go rather than redirecting,
         # so the flash survives until the browser loads that page.
-        url = url_for("game_night.view_game_night", game_night_id=game_night_id, _anchor="played")
+        url = url_for(
+            "game_night.view_game_night",
+            game_night_id=game_night_id,
+            saved=game_night_game_id,  # which game the winner sweep plays on
+            _anchor="played",
+        )
         return jsonify(redirect=url)
 
     game_night_game, players, existing_results = game_night_services.get_log_results_data(

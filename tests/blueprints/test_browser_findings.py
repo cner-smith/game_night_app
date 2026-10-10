@@ -65,7 +65,7 @@ def test_saved_results_answer_with_where_to_go_and_keep_the_flash(client, w):
     login(client, host)
     resp = _log(client, gn, gng, {"a": _entry(ph, 12, 1)})
     assert resp.status_code == 200
-    assert resp.get_json()["redirect"].endswith(f"/game_night/{gn.id}#played")
+    assert resp.get_json()["redirect"].endswith(f"/game_night/{gn.id}?saved={gng.id}#played")
     assert "Results logged" in client.get(f"/game_night/{gn.id}").get_data(as_text=True)
 
 
@@ -82,7 +82,8 @@ def test_tracker_save_redirects_to_played(client, w):
     )
     login(client, host)
     resp = client.post(f"/tracker/{session.id}/save")
-    assert resp.status_code == 302 and resp.location.endswith(f"/game_night/{gn.id}#played")
+    assert resp.status_code == 302
+    assert resp.location.endswith(f"/game_night/{gn.id}?saved={gng.id}#played")
 
 
 # --- closing voting ----------------------------------------------------------------
@@ -132,6 +133,12 @@ def test_new_tracker_on_a_finalized_night_redirects_with_a_message(client, w):
     login(client, host)
     resp = client.get(f"/game_night/{gng.id}/tracker/new", follow_redirects=True)
     assert resp.status_code == 200 and "finalized" in resp.get_data(as_text=True)
+
+
+def test_night_page_marks_each_game_for_the_winner_sweep(client, w):
+    host, ann, gn, gng, ph, pa = _setup(w)
+    login(client, host)
+    assert f'data-gng="{gng.id}"' in client.get(f"/game_night/{gn.id}").get_data(as_text=True)
 
 
 # --- public recap ---------------------------------------------------------------------

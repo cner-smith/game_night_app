@@ -124,13 +124,18 @@
     }
   }
 
-  // ---- Back from the tracker (#played): sweep the winner row, count the scores up ----
+  // ---- Results just saved (#played?saved=<game>): sweep that game's winner row, count up ----
   if (location.hash === '#played') {
+    var params = new URLSearchParams(location.search), saved = params.get('saved');
     var games = $$('#played [data-gng]');
-    var last = games[games.length - 1];
-    if (last && !calm) {
-      $$('[data-winner-row]', last).forEach(function (r) { r.classList.add('gn-sweep'); });
-      $$('[data-score-cell]', last).forEach(function (c) { GN.countUp(c, +c.textContent, 700); });
+    var target = saved ? $('#played [data-gng="' + CSS.escape(saved) + '"]') : games[games.length - 1];
+    if (saved) {
+      params.delete('saved');
+      try { history.replaceState(null, '', location.pathname + (params.toString() ? '?' + params : '') + location.hash); } catch (e) {}
+    }
+    if (target && !calm) {
+      $$('[data-winner-row]', target).forEach(function (r) { r.classList.add('gn-sweep'); });
+      $$('[data-score-cell]', target).forEach(function (c) { GN.countUp(c, +c.textContent, 700); });
     }
   }
 
@@ -172,7 +177,10 @@
         // it stays (others may still want it): the button leaves and the row flashes green.
         if (row && form.hasAttribute('data-leaves-list')) {
           row.classList.add('gn-leave');
-          setTimeout(function () { row.remove(); }, calm ? 0 : 300);
+          setTimeout(function () {
+            row.remove();
+            if (!$('[data-wish-item]')) location.reload();  // show the empty-list message
+          }, calm ? 0 : 300);
           return;
         }
         done.className = 'text-xs font-medium text-green-700'; done.textContent = '📦 In your library';

@@ -13,7 +13,7 @@
     {% if not game_night_games %}<p class="text-sm text-stone-500">No games added yet. Add one when you sit down to play.</p>{% endif %}
     <ul class="space-y-6">
       {% for gng in game_night_games %}
-      <li data-gng class="border-b border-stone-100 last:border-0 pb-6 last:pb-0">
+      <li data-gng="{{ gng.game_night_game_id }}" class="border-b border-stone-100 last:border-0 pb-6 last:pb-0">
         <div class="flex gap-4">
           <a href="{{ url_for('games.view_game', game_id=gng.game_id) }}" class="flex-shrink-0">
             {% if gng.game_image_url %}<img src="{{ gng.game_image_url }}" alt="{{ gng.game_name }}" class="h-16 w-16 rounded-lg object-cover border border-stone-200">

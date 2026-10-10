@@ -271,7 +271,14 @@ def save_results(session_id):
         flash(str(e), "error")
         return redirect(url_for("tracker.end_game", session_id=session_id))
     gn_id = session.game_night_game.game_night_id
-    return redirect(url_for("game_night.view_game_night", game_night_id=gn_id, _anchor="played"))
+    return redirect(
+        url_for(
+            "game_night.view_game_night",
+            game_night_id=gn_id,
+            saved=session.game_night_game_id,  # which game the winner sweep plays on
+            _anchor="played",
+        )
+    )
 
 
 @tracker_bp.route("/tracker/<int:session_id>/discard", methods=["POST"])
