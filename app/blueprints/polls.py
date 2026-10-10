@@ -294,6 +294,23 @@ def poll_delete(poll_id: int):
     return redirect(url_for("polls.poll_list"))
 
 
+def _share_body(poll, person, poll_url: str) -> str:
+    return (
+        f"Hi {person.first_name},\n\n"
+        + (
+            f"Help pick a date for the next game night: {poll.title}\n"
+            if poll.date_poll
+            else f"There's a Game Night poll for you: {poll.title}\n"
+        )
+        + (f"{poll.description}\n" if poll.description else "")
+        + ("\nSay which dates work for you here:\n" if poll.date_poll else "\nAnswer it here:\n")
+        + f"{poll_url}\n\n"
+        "You'll be asked to sign in first. Forgot your password? "
+        "The sign-in page has a reset link.\n\n"
+        "— Game Night"
+    )
+
+
 @polls_bp.route("/polls/<int:poll_id>/share", methods=["GET", "POST"])
 @login_required
 def poll_share(poll_id: int):
@@ -320,41 +337,35 @@ def poll_share(poll_id: int):
             )
 
         recipients = [p for p in people if str(p.id) in selected_ids]
-        sent = 0
-        errors = 0
-        for person in recipients:
-            try:
-                msg = Message(
-                    subject=f"Game Night Poll: {poll.title}",
-                    recipients=[person.email],
-                    body=(
-                        f"Hi {person.first_name},\n\n"
-                        + (
-                            f"Help pick a date for the next game night: {poll.title}\n"
-                            if poll.date_poll
-                            else f"There's a Game Night poll for you: {poll.title}\n"
+        # One SMTP session for the whole batch (Flask-Mail's bulk recipe,
+        # mail.connect()), not a connect + TLS + login per person. A failed
+        # address doesn't stop the rest, and the flash names whoever didn't
+        # get it so a retry can select just them.
+        sent_ids: set[int] = set()
+        try:
+            with mail.connect() as conn:
+                for person in recipients:
+                    try:
+                        conn.send(
+                            Message(
+                                subject=f"Game Night Poll: {poll.title}",
+                                recipients=[person.email],
+                                body=_share_body(poll, person, poll_url),
+                            )
                         )
-                        + (f"{poll.description}\n" if poll.description else "")
-                        + (
-                            "\nSay which dates work for you here:\n"
-                            if poll.date_poll
-                            else "\nAnswer it here:\n"
-                        )
-                        + f"{poll_url}\n\n"
-                        "You'll be asked to sign in first. Forgot your password? "
-                        "The sign-in page has a reset link.\n\n"
-                        "— Game Night"
-                    ),
-                )
-                mail.send(msg)
-                sent += 1
-            except Exception:
-                errors += 1
+                        sent_ids.add(person.id)
+                    except Exception:
+                        current_app.logger.exception("Poll share email to %s failed", person.email)
+        except Exception:  # couldn't connect or log in (or quit) at all
+            current_app.logger.exception("Poll share: SMTP session failed")
 
-        if sent:
-            flash(f"Sent to {sent} person{'s' if sent != 1 else ''}.", "success")
-        if errors:
-            flash(f"{errors} email{'s' if errors != 1 else ''} failed to send.", "danger")
+        failed = [p for p in recipients if p.id not in sent_ids]
+        if sent_ids:
+            n = len(sent_ids)
+            flash(f"Sent to {n} {'person' if n == 1 else 'people'}.", "success")
+        if failed:
+            names = ", ".join(f"{p.first_name} {p.last_name}" for p in failed)
+            flash(f"Couldn't email {names}. Try again for just them.", "error")
         return redirect(url_for("polls.poll_list"))
 
     return render_template(
