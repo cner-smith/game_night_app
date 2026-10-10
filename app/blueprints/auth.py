@@ -27,13 +27,14 @@ def login():
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password")
 
-        success, message, user = auth_services.login(email, password)
+        success, message, user = auth_services.login(email, password, request.remote_addr)
 
         if success:
             login_user(user)
             return redirect(_safe_next(request.args.get("next")) or url_for("main.index"))
-        else:
-            flash(message, "error")
+        flash(message, "error")
+        if message == auth_services.TOO_MANY_LOGINS:
+            return render_template("login.html"), 429
 
     context = {}
     return render_template("login.html", **context)
@@ -71,7 +72,7 @@ def signup():
 def forgot_password():
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
-        success, message = auth_services.forgot_password(email)
+        success, message = auth_services.forgot_password(email, request.remote_addr)
         flash(message, "success" if success else "error")
 
         if success:
@@ -111,6 +112,7 @@ def update_password():
         flash(message, "success" if success else "error")
 
         if success:
+            login_user(current_user._get_current_object())  # new session token: stay signed in
             return redirect(url_for("main.index"))
 
     context = {}
@@ -131,6 +133,8 @@ def manage_user():
             request.form.get("new_password"),
             request.form.get("confirm_password"),
         )
+        if success:
+            login_user(user._get_current_object())  # keep this session if the token changed
         flash(message, "success" if success else "error")
         return redirect(url_for("auth.manage_user"))
 

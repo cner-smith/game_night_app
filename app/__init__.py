@@ -57,8 +57,19 @@ def register_user_loader(app):
 
     @login_manager.user_loader
     def load_user(user_id):
-        person = db.session.get(Person, int(user_id))
-        return person if person is not None and person.active else None
+        # Person.get_id() is "<id>:<session_token>" (just "<id>" until a token
+        # is first set), so a new token ends every older session.
+        import hmac
+
+        pid, _, token = str(user_id).partition(":")
+        if not pid.isdigit():
+            return None
+        person = db.session.get(Person, int(pid))
+        if person is None or not person.active:
+            return None
+        if not hmac.compare_digest(token, person.session_token or ""):
+            return None
+        return person
 
 
 def start_schedulers(app):

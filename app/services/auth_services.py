@@ -1,9 +1,10 @@
 import hashlib
+from datetime import timedelta
 
 from sqlalchemy import func
 
 from app.extensions import bcrypt
-from app.models import Person, db
+from app.models import AuthThrottle, Person, db
 from app.utils import send_email
 
 PASSWORD_MIN_LENGTH = 8
@@ -24,13 +25,59 @@ def hash_password(password):
     return bcrypt.generate_password_hash(password).decode("utf-8")
 
 
-def login(email, password):
+# Throttling lives in the database so every worker and thread sees the same
+# counts (Flask-Limiter's only shared backends are Redis/Memcached/MongoDB).
+LOGIN_WINDOW = 15 * 60
+LOGIN_EMAIL_LIMIT = 10  # failed sign-ins for one email per window
+LOGIN_IP_LIMIT = 30  # failed sign-ins from one address per window
+FORGOT_WINDOW = 60 * 60
+FORGOT_EMAIL_LIMIT = 3  # reset emails to one address per window
+FORGOT_IP_LIMIT = 10  # reset requests from one address per window
+TOO_MANY_LOGINS = "Too many sign-in attempts. Wait a few minutes and try again."
+
+
+def _throttle_on():
+    from flask import current_app
+
+    return current_app.config.get("AUTH_THROTTLE", True)
+
+
+def _email_key(kind, email):
+    return f"{kind}:email:" + hashlib.sha256(email.encode("utf-8")).hexdigest()[:40]
+
+
+def _over_limit(key, limit, window):
+    since = func.now() - timedelta(seconds=window)
+    count = AuthThrottle.query.filter(
+        AuthThrottle.key == key, AuthThrottle.created_at > since
+    ).count()
+    return count >= limit
+
+
+def _record(*keys):
+    AuthThrottle.query.filter(AuthThrottle.created_at < func.now() - timedelta(days=1)).delete(
+        synchronize_session=False
+    )
+    db.session.add_all([AuthThrottle(key=key) for key in keys if key])
+    db.session.commit()
+
+
+def login(email, password, ip=None):
     """Authenticate user and return success status, message, and user instance."""
     if not email or not password:
         return False, "Enter your email and password.", None
+    throttle = _throttle_on()
+    email_key, ip_key = _email_key("login", email), f"login:ip:{ip}" if ip else None
+    if throttle and (
+        _over_limit(email_key, LOGIN_EMAIL_LIMIT, LOGIN_WINDOW)
+        or (ip_key and _over_limit(ip_key, LOGIN_IP_LIMIT, LOGIN_WINDOW))
+    ):
+        return False, TOO_MANY_LOGINS, None
     user = Person.query.filter(func.lower(Person.email) == email).first()
     if user and user.password and bcrypt.check_password_hash(user.password, password):
         return True, "Login successful.", user
+    if throttle:
+        _record(email_key, ip_key)
     return False, "Invalid email or password.", None
 
 
@@ -110,12 +157,20 @@ def user_for_reset_token(token):
     return user
 
 
-def forgot_password(email):
+def forgot_password(email, ip=None):
     """Email a one-time reset link. Says the same thing whether or not the
     email has an account, so the form can't be used to find out."""
     from flask import url_for
 
-    user = Person.query.filter(func.lower(Person.email) == (email or "").strip().lower()).first()
+    email = (email or "").strip().lower()
+    if _throttle_on():
+        email_key, ip_key = _email_key("forgot", email), f"forgot:ip:{ip}" if ip else None
+        if _over_limit(email_key, FORGOT_EMAIL_LIMIT, FORGOT_WINDOW) or (
+            ip_key and _over_limit(ip_key, FORGOT_IP_LIMIT, FORGOT_WINDOW)
+        ):
+            return True, FORGOT_MESSAGE  # same answer; just don't send
+        _record(email_key, ip_key)
+    user = Person.query.filter(func.lower(Person.email) == email).first()
     if user and user.active and user.password:
         link = url_for("auth.reset_password", token=make_reset_token(user), _external=True)
         html_body = f"""
@@ -141,6 +196,7 @@ def reset_password(user, new_password, confirm_password):
     if new_password != confirm_password:
         return False, "The passwords don't match."
     user.password = hash_password(new_password)
+    user.rotate_session_token()  # sign out anyone else using the old password
     db.session.commit()
     return True, "Password changed. You can sign in now."
 
@@ -157,6 +213,7 @@ def update_password(user, current_password, new_password, confirm_password):
         return False, "New passwords do not match."
 
     user.password = hash_password(new_password)
+    user.rotate_session_token()  # the caller logs this session back in
     db.session.commit()
 
     return True, "Password updated successfully."
@@ -188,6 +245,7 @@ def update_profile(user, current_password, email, new_password, confirm_password
         if new_password != confirm_password:
             return False, "New passwords do not match."
         user.password = hash_password(new_password)
+        user.rotate_session_token()  # the caller logs this session back in
 
     db.session.commit()
     changed = [what for what, did in (("Email", changing_email), ("password", new_password)) if did]

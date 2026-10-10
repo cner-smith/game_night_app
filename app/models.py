@@ -1,4 +1,5 @@
 # models.py
+import secrets
 
 from flask_login import UserMixin
 from sqlalchemy import ForeignKey, func
@@ -107,6 +108,9 @@ class Person(db.Model, UserMixin):
     active = db.Column(db.Boolean, default=True, nullable=False, server_default="true")
     # Trusted to start and host their own game nights without being an admin.
     can_host = db.Column(db.Boolean, default=False, nullable=False, server_default="false")
+    # Part of the login session id (see get_id); a new one logs out every
+    # other session. NULL until first set, then sessions hold "<id>:<token>".
+    session_token = db.Column(db.String(64), nullable=True)
 
     players = relationship("Player", back_populates="person", cascade="all, delete-orphan")
     owned_games = relationship("OwnedBy", back_populates="person", cascade="all, delete-orphan")
@@ -127,6 +131,14 @@ class Person(db.Model, UserMixin):
         order_by="(PaymentHandle.preferred.desc(), PaymentHandle.id)",
     )
 
+    def get_id(self):
+        """Flask-Login's "alternative token": what the session stores."""
+        return f"{self.id}:{self.session_token}" if self.session_token else str(self.id)
+
+    def rotate_session_token(self):
+        """Log out every session (callers log the current one back in)."""
+        self.session_token = secrets.token_urlsafe(32)
+
     @property
     def is_admin_or_owner(self):
         return self.admin or self.owner
@@ -138,6 +150,16 @@ class Person(db.Model, UserMixin):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
+
+
+class AuthThrottle(db.Model):
+    """A failed sign-in or a reset request, for slowing down guessing and
+    reset-email floods. Rows older than a day are cleared as new ones arrive."""
+
+    __tablename__ = "auth_throttle"
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, server_default=func.now(), nullable=False)
 
 
 class Game(db.Model):

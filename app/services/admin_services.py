@@ -86,6 +86,7 @@ def remove_user(user_id, current_user_id):
         user.email = None
         user.password = None
         user.admin = False
+        user.rotate_session_token()  # restoring them later mustn't revive old sessions
         db.session.commit()
         return (
             True,

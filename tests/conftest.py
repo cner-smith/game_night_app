@@ -20,6 +20,7 @@ class TestConfig(Config):
     LOGIN_DISABLED = False
     SQLALCHEMY_DATABASE_URI = os.environ.get("TEST_DATABASE_URL")
     BCRYPT_LOG_ROUNDS = 4  # fast hashing in tests
+    AUTH_THROTTLE = False  # the suite logs in many times; throttle tests turn it on
     MEDIA_DIR = tempfile.mkdtemp(prefix="gamenight_media_")
 
 
