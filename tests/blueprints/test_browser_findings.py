@@ -60,6 +60,15 @@ def test_out_of_range_score_is_a_400_not_a_500(client, w):
     assert "too big" in resp.get_json()["error"]
 
 
+@pytest.mark.parametrize("place", [0, -1, 3, 20000000])
+def test_places_must_be_within_the_nights_players(client, w, place):
+    host, ann, gn, gng, ph, pa = _setup(w)  # two players: places 1..2
+    login(client, host)
+    resp = _log(client, gn, gng, {"a": _entry(ph, 5, place)})
+    assert resp.status_code == 400
+    assert Result.query.filter_by(game_night_game_id=gng.id).count() == 0
+
+
 def test_saved_results_answer_with_where_to_go_and_keep_the_flash(client, w):
     host, ann, gn, gng, ph, pa = _setup(w)
     login(client, host)
@@ -150,3 +159,25 @@ def test_public_recap_leaves_out_the_notes(client, w):
     page = client.get(f"/game_night/{gn.id}/recap").get_data(as_text=True)
     assert "Gate code 4321" not in page
     assert _db.session.get(GameNight, gn.id).notes == "Gate code 4321"
+
+
+# --- background toggles (heart, "I bought it") answer for fetch, not with a redirect ---
+
+
+def test_background_claim_answers_204_then_400_when_already_owned(client, w):
+    host = w.person("Host")
+    game = w.game()
+    login(client, host)
+    headers = {"X-Background": "1"}
+    assert client.post(f"/game/{game.id}/claim", headers=headers).status_code == 204
+    resp = client.post(f"/game/{game.id}/claim", headers=headers)
+    assert resp.status_code == 400 and "already own" in resp.get_data(as_text=True)
+
+
+def test_background_wishlist_toggle_answers_204(client, w):
+    host = w.person("Host")
+    game = w.game()
+    login(client, host)
+    assert (
+        client.post(f"/wishlist/toggle/{game.id}", headers={"X-Background": "1"}).status_code == 204
+    )

@@ -306,6 +306,10 @@ def _parse_results(game_night, scores_positions):
             raise ServiceError("Results can only be logged for this night's players.")
         if any(n is not None and abs(n) > _INT_MAX for n in (score, position)):
             raise ServiceError("That number is too big to save.")
+        if position is not None and not 1 <= position <= len(night_player_ids):
+            # Rankings expand every place up to the highest one, so a stray 20000000
+            # would stall every page that shows them.
+            raise ServiceError(f"Places go from 1 to {len(night_player_ids)}.")
         parsed[player_id] = (score, position)
     return parsed
 

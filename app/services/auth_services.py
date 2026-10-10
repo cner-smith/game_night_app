@@ -98,14 +98,19 @@ def _invite_fingerprint(person):
     return hashlib.sha256((person.session_token or "").encode("utf-8")).hexdigest()[:16]
 
 
-def make_invite_token(person):
-    return _invite_serializer().dumps({"id": person.id, "st": _invite_fingerprint(person)})
+def make_invite_token(person, inviter):
+    # The link names who made it, so it stops working if they could no longer
+    # make it (they lost hosting, or an admin has since given the person rights).
+    return _invite_serializer().dumps(
+        {"id": person.id, "st": _invite_fingerprint(person), "by": inviter.id}
+    )
 
 
 def invite_link(person):
     from flask import url_for
+    from flask_login import current_user
 
-    return url_for("auth.signup", invite=make_invite_token(person), _external=True)
+    return url_for("auth.signup", invite=make_invite_token(person, current_user), _external=True)
 
 
 def person_for_invite(token):
@@ -124,13 +129,18 @@ def person_for_invite(token):
         return None
     if _invite_fingerprint(person) != data.get("st"):
         return None
+    inviter = db.session.get(Person, data["by"]) if isinstance(data.get("by"), int) else None
+    if inviter is None or not inviter.active or not can_invite(inviter, person):
+        return None
     return person
 
 
 def can_invite(user, person):
-    """Admins can invite anyone who hasn't signed up. Hosts can invite
-    unclaimed people who play on a night they host, unless an admin has given
-    that person rights (only an admin's link should hand those over)."""
+    """Admins can invite anyone who hasn't signed up. Hosts can invite their
+    own guests: unclaimed people who have only played on nights this host ran
+    (so a host can't take over a regular's history by adding them to a night),
+    and only if an admin hasn't given them rights (only an admin's link should
+    hand those over)."""
     from app.models import GameNight, Player
 
     if person is None or not person.active or person.email or person.password or person.owner:
@@ -139,13 +149,14 @@ def can_invite(user, person):
         return True
     if not user.can_host or person.admin or person.can_host:
         return False
-    return (
-        db.session.query(Player.id)
-        .join(GameNight, GameNight.id == Player.game_night_id)
-        .filter(Player.people_id == person.id, GameNight.host_id == user.id)
-        .first()
-        is not None
-    )
+    hosted = {
+        bool(mine)
+        for (mine,) in db.session.query(GameNight.host_id == user.id)
+        .join(Player, Player.game_night_id == GameNight.id)
+        .filter(Player.people_id == person.id)
+        .distinct()
+    }
+    return hosted == {True}
 
 
 def invitable_people(user):

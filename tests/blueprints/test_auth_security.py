@@ -89,7 +89,9 @@ def test_profile_enforces_policy(client, make_person):
 def test_signup_enforces_policy(make_stub):
     from app.services import auth_services
 
-    invite = auth_services.make_invite_token(make_stub("Shorty", "Pw"))
+    invite = auth_services.make_invite_token(
+        make_stub("Shorty", "Pw"), make_stub("Ad", "Min", admin=True)
+    )
     ok, message = auth_services.signup("shorty@test.invalid", "abc", invite=invite)
     assert not ok and "at least 8 characters" in message
 
@@ -337,11 +339,11 @@ def test_invite_link_claims_that_person_with_their_rights(admin_client, db, make
         _cleanup_email(db, "someone.else@test.invalid")
 
 
-def test_invite_links_expire_and_cannot_be_forged(client, db, make_stub, monkeypatch):
+def test_invite_links_expire_and_cannot_be_forged(client, db, make_stub, make_person, monkeypatch):
     from app.services import auth_services
 
     stub = make_stub("Expiring", "Invite")
-    token = auth_services.make_invite_token(stub)
+    token = auth_services.make_invite_token(stub, make_person("Adm", admin=True))
     assert auth_services.person_for_invite(token) == stub
     assert auth_services.person_for_invite(token[:-2] + "xx") is None
     assert auth_services.person_for_invite("garbage") is None
@@ -354,11 +356,11 @@ def test_deactivating_someone_voids_their_old_invite(db, make_stub, make_person,
 
     stub, adm = make_stub("Gone", "ForNow"), make_person("Adm", admin=True)
     make_night(stub)
-    token = auth_services.make_invite_token(stub)
+    token = auth_services.make_invite_token(stub, adm)
     admin_services.remove_user(stub.id, adm.id)
     admin_services.restore_user(stub.id)
     assert auth_services.person_for_invite(token) is None
-    assert auth_services.person_for_invite(auth_services.make_invite_token(stub)) == stub
+    assert auth_services.person_for_invite(auth_services.make_invite_token(stub, adm)) == stub
 
 
 def test_who_can_invite(db, make_stub, make_person, make_night):
@@ -369,13 +371,15 @@ def test_who_can_invite(db, make_stub, make_person, make_night):
     host.can_host = True
     guest, stranger = make_stub("Guest", "OfHost"), make_stub("Not", "TheirGuest")
     vip = make_stub("Made", "Admin", admin=True)
-    make_night(guest, vip, host_id=host.id)
-    make_night(stranger)
+    regular = make_stub("Plays", "Everywhere")
+    make_night(guest, vip, regular, host_id=host.id)
+    make_night(stranger, regular)
 
     assert can_invite(adm, guest) and can_invite(adm, stranger) and can_invite(adm, vip)
     assert can_invite(host, guest)
     assert not can_invite(host, stranger)  # not on a night they host
     assert not can_invite(host, vip)  # admin rights come from an admin's link only
+    assert not can_invite(host, regular)  # has history at other nights: not just their guest
     assert not can_invite(member, guest)
     assert not can_invite(adm, member)  # already signed up
 
@@ -396,3 +400,32 @@ def test_hosts_get_invite_links_for_their_guests(client, db, make_stub, make_per
     member = make_person("Mem")
     login(client, member)
     assert client.get("/invites").status_code == 302
+
+
+def test_a_hosts_old_link_dies_when_an_admin_gives_the_guest_rights(
+    db, make_stub, make_person, make_night
+):
+    from app.services import auth_services
+
+    host = make_person("Hoster")
+    host.can_host = True
+    guest = make_stub("Guest", "Promoted")
+    make_night(guest, host_id=host.id)
+    token = auth_services.make_invite_token(guest, host)
+    assert auth_services.person_for_invite(token) == guest
+    guest.admin = True  # an admin promotes them before they sign up
+    db.session.commit()
+    assert auth_services.person_for_invite(token) is None
+
+
+def test_a_link_dies_when_its_maker_loses_hosting(db, make_stub, make_person, make_night):
+    from app.services import auth_services
+
+    host = make_person("Hoster")
+    host.can_host = True
+    guest = make_stub("Guest", "Orphan")
+    make_night(guest, host_id=host.id)
+    token = auth_services.make_invite_token(guest, host)
+    host.can_host = False
+    db.session.commit()
+    assert auth_services.person_for_invite(token) is None

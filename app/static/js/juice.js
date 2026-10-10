@@ -34,6 +34,17 @@
     setTimeout(function () { if (!el.matches(':hover, :focus-within')) dismiss(el); }, 4000);
   });
 
+  // The server's own message for a refused request (4xx with a short plain-text body), else null.
+  GN.serverMessage = function (status, text) {
+    text = (text || '').trim();
+    return status >= 400 && status < 500 && text && text.length < 300 && text.indexOf('<') === -1 ? text : null;
+  };
+  // HTMX doesn't swap error responses, so say what went wrong (the tracker handles its own).
+  document.addEventListener('htmx:responseError', function (e) {
+    if (e.detail.elt.closest && e.detail.elt.closest('[data-tracker]')) return;
+    var xhr = e.detail.xhr;
+    GN.toast(GN.serverMessage(xhr.status, xhr.responseText) || 'Something went wrong. Try again.');
+  });
   GN.toast = function (msg) {
     var t = document.createElement('div');
     t.className = 'gn-toast'; t.setAttribute('role', 'status'); t.textContent = msg;
@@ -155,15 +166,20 @@
   });
 
   // ---- Background POST for small toggles: <form data-juice="heart|bought"> ----
-  // Posts with fetch (the redirect target renders, so its flash is used up), then animates.
-  // Any failure falls back to a normal submit.
+  // Posts with fetch and X-Background: the server answers 204, or 400 with its message.
+  // A network failure falls back to a normal submit.
   document.addEventListener('submit', function (e) {
     var form = e.target, kind = form.dataset && form.dataset.juice;
     if (!kind || e.defaultPrevented || !window.fetch) return;
     e.preventDefault();
     var btn = form.querySelector('button');
-    fetch(form.action, { method: 'POST', body: new FormData(form), credentials: 'same-origin' }).then(function (r) {
-      if (!r.ok) throw r;
+    fetch(form.action, {
+      method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: { 'X-Background': '1' }
+    }).then(function (r) {
+      if (!r.ok) {
+        r.text().then(function (t) { GN.toast(GN.serverMessage(r.status, t) || 'That didn’t work. Try again.'); });
+        return;
+      }
       if (kind === 'heart') {
         var on = btn.getAttribute('aria-pressed') !== 'true';
         btn.setAttribute('aria-pressed', on);
@@ -188,7 +204,7 @@
         setTimeout(function () { form.replaceWith(done); }, calm ? 0 : 300);
         if (row && !calm) play(row, 'gn-sweep', 1400);
       }
-    }).catch(function () { form.removeAttribute('data-juice'); form.submit(); });
+    }, function () { form.removeAttribute('data-juice'); form.submit(); });
   });
 
   // ---- Live tracker: instant taps, HTMX reconciles ----
@@ -232,11 +248,16 @@
       if (cell && e.target.type === 'number') { pending[cell.id] = (pending[cell.id] || 0) + 1; leaders(); }
     });
     tracker.addEventListener('htmx:afterRequest', function (e) {
-      var cell = e.detail.elt.closest('[data-cell]'), input = cell && $('input[type=number]', cell);
+      var cell = e.detail.elt.closest('[data-cell]');
+      if (!cell) return;
+      var input = $('input[type=number]', cell), xhr = e.detail.xhr;
+      if (!e.detail.successful) {
+        GN.toast(GN.serverMessage(xhr.status, xhr.responseText) || 'Couldn’t save that. Check your connection.');
+        if (e.detail.elt.type === 'checkbox') e.detail.elt.checked = !e.detail.elt.checked;
+      }
       if (!input) return;
       pending[cell.id] = Math.max(0, (pending[cell.id] || 1) - 1);
       if (!e.detail.successful) {
-        GN.toast('Couldn’t save that tap. Check your connection.');
         var step = +e.detail.elt.dataset.step;
         if (step) input.value = (+input.value || 0) - step;
       } else if (!pending[cell.id]) {

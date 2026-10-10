@@ -68,12 +68,21 @@ def view_game(game_id):
     return render_template("view_game.html", **context)
 
 
+def _toggled(ok, message, fallback):
+    """Answer a small toggle. juice.js posts the heart and "I bought it" in the
+    background (X-Background: 1) and animates on 204 or shows the message on
+    400; a plain form post gets the usual flash and redirect."""
+    if request.headers.get("X-Background"):
+        return ("", 204) if ok else (message, 400)
+    flash(message, "success" if ok else "error")
+    return redirect(request.referrer or fallback)
+
+
 @games_bp.route("/game/<int:game_id>/claim", methods=["POST"])
 @login_required
 def claim_game(game_id):
     success, message = games_services.modify_ownership(current_user.id, game_id, add=True)
-    flash(message, "success" if success else "error")
-    return redirect(request.referrer or url_for("games.games_index"))
+    return _toggled(success, message, url_for("games.games_index"))
 
 
 @games_bp.route("/game/<int:game_id>/remove_ownership", methods=["POST"])
@@ -156,8 +165,7 @@ def vote_wishlist(game_id):
 @login_required
 def toggle_wishlist(game_id):
     category, message = games_services.toggle_wishlist(current_user.id, game_id)
-    flash(message, category)
-    return redirect(request.referrer or url_for("games.my_wishlist"))
+    return _toggled(category != "error", message, url_for("games.my_wishlist"))
 
 
 @games_bp.route("/game/<int:game_id>/rating", methods=["POST"])

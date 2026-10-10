@@ -29,8 +29,9 @@ Existing duplicates are resolved first, in this order:
    - tracker values and team spots: moved unless the kept row already has
      one for that field/team, in which case the duplicate's is dropped.
    The duplicate player rows are then deleted.
-2. Duplicate results for one player in one game: the most recent
-   (latest created_at, then highest id) is kept, the others deleted.
+2. Duplicate results for one player in one game: one with a score or
+   place beats a blank one; among those, the most recent (latest
+   created_at, then highest id) is kept, the others deleted.
 3. Duplicate votes by one player for one game: the highest id is kept.
 4. A game nominated more than once on a night: the earliest nomination
    (lowest id) is kept; the other nominators are left free to nominate
@@ -198,7 +199,11 @@ def _keep_first(table, key, order):
 def upgrade():
     _merge_duplicate_players()
     _keep_first(
-        "results", ["game_night_game_id", "player_id"], "created_at DESC NULLS LAST, id DESC"
+        "results",
+        ["game_night_game_id", "player_id"],
+        # A blank row (no score, no place) never beats a real one: the old log-results
+        # page saved blanks in the same submit, so they share created_at.
+        "(score IS NULL AND position IS NULL), created_at DESC NULLS LAST, id DESC",
     )
     _keep_first("game_votes", ["player_id", "game_id"], "id DESC")
     _keep_first("game_nominations", ["game_night_id", "game_id"], "id")
