@@ -62,13 +62,12 @@ def register_user_loader(app):
 
 
 def start_schedulers(app):
-    """Start the background scheduler for reminders.
+    """Start the background scheduler for reminders, unless ENABLE_SCHEDULER=false.
 
-    In multi-worker Gunicorn deployments each worker calls create_app(), which
-    would start N copies of the scheduler and send N reminder emails per run.
-    Set ENABLE_SCHEDULER=false on web worker processes and run a dedicated
-    single-process scheduler worker (e.g. `gunicorn --workers 1`) or a
-    standalone cron process instead.
+    In production the web container sets ENABLE_SCHEDULER=false and the
+    game_night_scheduler service runs `python -m app.scheduler` (app/scheduler.py),
+    so the job runs once however many gunicorn workers or threads there are.
+    Anything that starts create_app() in more than one process must keep it off.
     """
     import os
 
