@@ -181,17 +181,19 @@ def manage_game_in_night(game_night_id):
 @night_manager_required
 def log_results(game_night_id, game_night_game_id):
     if request.method == "POST":
-        data = request.get_json()
+        data = request.get_json(silent=True)
         if not data:
             flash("No data received", "error")
             return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
         success, message = game_night_services.log_results(game_night_id, game_night_game_id, data)
-        flash(message, "success" if success else "error")
+        if not success:
+            return message, 400
+        flash(message, "success")
         return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
     game_night_game, players, existing_results = game_night_services.get_log_results_data(
-        game_night_game_id
+        game_night_id, game_night_game_id
     )
 
     context = {

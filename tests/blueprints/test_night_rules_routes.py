@@ -185,3 +185,82 @@ def test_players_cannot_finalize(client, w):
     client.post(f"/game_night/{gn.id}/finalize")
     _db.session.refresh(gn)
     assert not gn.final
+
+
+# --- log results checks its body ---------------------------------------------
+
+
+def _log_setup(w):
+    host, ann = w.person("Host"), w.person("Ann")
+    gn = w.night(host, ann, host=host)
+    gng = w.play(gn)
+    return host, gn, gng, w.player(gn, host), w.player(gn, ann)
+
+
+def _log(client, gn, gng, body):
+    return client.post(f"/game_night/{gn.id}/log_results/{gng.id}", json=body)
+
+
+def test_log_results_saves_scores_and_places(client, w):
+    host, gn, gng, ph, pa = _log_setup(w)
+    login(client, host)
+    resp = _log(
+        client,
+        gn,
+        gng,
+        {
+            str(ph.id): {"user_id": str(ph.id), "score": 12, "position": 1},
+            str(pa.id): {"user_id": str(pa.id), "score": None, "position": None},
+        },
+    )
+    assert resp.status_code == 302
+    got = {r.player_id: (r.position, r.score) for r in gng.results}
+    assert got == {ph.id: (1, 12), pa.id: (None, None)}
+
+
+def test_log_results_refuses_a_player_from_another_night(client, w):
+    host, gn, gng, ph, pa = _log_setup(w)
+    stranger = w.person("Stranger")
+    other = w.night(stranger)
+    ps = w.player(other, stranger)
+    login(client, host)
+    resp = _log(client, gn, gng, {str(ps.id): {"user_id": ps.id, "score": 1, "position": 1}})
+    assert resp.status_code == 400
+    assert Result.query.filter_by(player_id=ps.id).count() == 0
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"score": 1, "position": 1},  # no user_id
+        {"user_id": "x", "score": 1, "position": 1},
+        {"user_id": "PID", "score": "lots", "position": 1},
+        {"user_id": "PID", "score": 1, "position": [1]},
+        "not an object",
+    ],
+)
+def test_log_results_rejects_malformed_entries(client, w, entry):
+    host, gn, gng, ph, pa = _log_setup(w)
+    if isinstance(entry, dict) and entry.get("user_id") == "PID":
+        entry = {**entry, "user_id": ph.id}
+    login(client, host)
+    resp = _log(client, gn, gng, {str(ph.id): entry})
+    assert resp.status_code == 400
+    assert Result.query.filter_by(game_night_game_id=gng.id).count() == 0
+
+
+def test_log_results_rejects_a_non_object_body(client, w):
+    host, gn, gng, ph, pa = _log_setup(w)
+    login(client, host)
+    assert _log(client, gn, gng, [1, 2]).status_code == 400
+
+
+def test_log_results_page_404s_for_another_nights_game(client, w):
+    host, gn, gng, ph, pa = _log_setup(w)
+    other = w.night(host, host=host)
+    other_gng = w.play(other)
+    login(client, host)
+    assert client.get(f"/game_night/{gn.id}/log_results/{gng.id}").status_code == 200
+    assert client.get(f"/game_night/{gn.id}/log_results/{other_gng.id}").status_code == 404
+    resp = _log(client, gn, other_gng, {str(ph.id): {"user_id": ph.id, "score": 1, "position": 1}})
+    assert resp.status_code == 404

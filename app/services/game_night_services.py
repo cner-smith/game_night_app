@@ -215,25 +215,55 @@ def manage_game_in_night(
     return True, f"Game {'added' if action == 'add' else 'removed'} successfully."
 
 
+def _optional_int(value):
+    """None/blank stays None; otherwise an int, or ValueError."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool) or not isinstance(value, int | str):
+        raise ValueError(value)
+    return int(value)
+
+
+def _parse_results(game_night, scores_positions):
+    """{player_id: (score, position)} from the log-results body, or ValueError
+    with a message. Every player must be at this night."""
+    if not isinstance(scores_positions, dict):
+        raise ValueError("Send results as an object keyed by player.")
+    night_player_ids = {p.id for p in game_night.players}
+    parsed = {}
+    for data in scores_positions.values():
+        if not isinstance(data, dict):
+            raise ValueError("Each result needs user_id, score and position.")
+        try:
+            player_id = _optional_int(data.get("user_id"))
+            score = _optional_int(data.get("score"))
+            position = _optional_int(data.get("position"))
+        except (TypeError, ValueError):
+            raise ValueError("Scores and places must be whole numbers.") from None
+        if player_id is None or player_id not in night_player_ids:
+            raise ValueError("Results can only be logged for this night's players.")
+        parsed[player_id] = (score, position)
+    return parsed
+
+
 def log_results(game_night_id, game_night_game_id, scores_positions):
-    """Log results for a game night game."""
+    """Log results for a game night game. Returns (success, message);
+    a malformed body or a player from another night changes nothing."""
     GameNightGame.query.filter_by(game_night_id=game_night_id, id=game_night_game_id).first_or_404()
+    game_night = GameNight.query.get_or_404(game_night_id)
     try:
-        night_policy.require_editable(GameNight.query.get_or_404(game_night_id))
-    except night_policy.NightRuleError as e:
+        night_policy.require_editable(game_night)
+        parsed = _parse_results(game_night, scores_positions)
+    except ValueError as e:
         return False, str(e)
 
-    for player_id, data in scores_positions.items():
-        user_id = int(data["user_id"])
-        score = data["score"]
-        position = data["position"]
-
+    for player_id, (score, position) in parsed.items():
         # Fetch or create a result entry for this player
         result = Result.query.filter_by(
-            game_night_game_id=game_night_game_id, player_id=user_id
+            game_night_game_id=game_night_game_id, player_id=player_id
         ).first()
         if not result:
-            result = Result(game_night_game_id=game_night_game_id, player_id=user_id)
+            result = Result(game_night_game_id=game_night_game_id, player_id=player_id)
             db.session.add(result)
 
         # Update score and position
@@ -249,9 +279,11 @@ def get_all_games():
     return Game.query.order_by(Game.name).all()
 
 
-def get_log_results_data(game_night_game_id):
-    """Retrieve data for logging game results."""
-    game_night_game = GameNightGame.query.get_or_404(game_night_game_id)
+def get_log_results_data(game_night_id, game_night_game_id):
+    """Retrieve data for logging game results (404 unless the game is in this night)."""
+    game_night_game = GameNightGame.query.filter_by(
+        id=game_night_game_id, game_night_id=game_night_id
+    ).first_or_404()
     players = game_night_game.game_night.players
     existing_results = {r.player_id: r for r in game_night_game.results}
     return game_night_game, players, existing_results
