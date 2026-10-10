@@ -41,7 +41,6 @@ def register_blueprints(app):
     app.register_blueprint(blueprints.tracker_bp)
     app.register_blueprint(blueprints.photos_bp)
     app.register_blueprint(blueprints.food_bp)
-    # test_bp removed — was a debug artifact registered unconditionally
 
 
 def setup_logging(debug: bool = False):

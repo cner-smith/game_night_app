@@ -483,10 +483,10 @@ def get_view_game_night_details(game_night_id, current_user_id):
         {
             "game_id": nomination.game_id,
             "game_name": nomination.game_name,
-            "image_url": nomination.image_url,  # ✅ Added image_url
+            "image_url": nomination.image_url,
             "total_nominations": nomination.total_nominations,
             "vote_score": nomination.vote_score,
-            "user_vote": user_votes.get(nomination.game_id, None),  # ✅ Added user_vote
+            "user_vote": user_votes.get(nomination.game_id, None),
         }
         for nomination in GameNightNominationsVotes.query.filter_by(game_night_id=game_night_id)
         # Only games that are actually nominated (votes can't outlive a nomination,
