@@ -265,7 +265,7 @@ Then future migrations will apply normally with `flask db upgrade`.
 
 ### Database Views
 
-The app uses 9 PostgreSQL views for performance (e.g., `GameNightRankings`, `GamesIndex`). These are tracked in migration `a1b2c3d4e5f6_create_views.py`. If you're starting from sgammill's original database, run `flask db upgrade` from the beginning to create them, or manually verify the views exist.
+The app uses 5 PostgreSQL views for performance (e.g., `GameNightRankings`, `GamesIndex`). These are tracked in migration `a1b2c3d4e5f6_create_views.py`. If you're starting from sgammill's original database, run `flask db upgrade` from the beginning to create them, or manually verify the views exist.
 
 ---
 
@@ -313,6 +313,8 @@ A night can have an optional `address`. Only people who can open the night see i
 ### Achievement Badges
 
 26 badges are automatically evaluated when a game night is **finalized** (marked as complete). The evaluation runs in `app/services/badge_services.py`.
+
+After changing a badge rule, run `flask badges recheck --dry-run` to see which awards would be added or removed when every finalized night is re-judged in date order, then `flask badges recheck` to save those changes in one transaction. Awards that still qualify are left as they are.
 
 | Badge | Trigger |
 |-------|---------|
