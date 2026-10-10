@@ -212,6 +212,25 @@ def toggle_game_night_field(game_night_id, field):
     return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
 
 
+@game_night_bp.route("/game_night/<int:game_night_id>/finalize", methods=["POST"])
+@login_required
+@night_manager_required
+def finalize_game_night(game_night_id):
+    changed, message = game_night_services.finalize(game_night_id)
+    flash(message, "success" if changed else "info")
+    params = {"finalized": 1} if changed else {}
+    return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id, **params))
+
+
+@game_night_bp.route("/game_night/<int:game_night_id>/unfinalize", methods=["POST"])
+@login_required
+@night_manager_required
+def unfinalize_game_night(game_night_id):
+    changed, message = game_night_services.unfinalize(game_night_id)
+    flash(message, "success" if changed else "info")
+    return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
+
+
 @game_night_bp.route("/game_night/<int:game_night_id>/add_game", methods=["GET", "POST"])
 @login_required
 @night_manager_required

@@ -123,3 +123,65 @@ def test_out_of_range_places_are_refused(client, w, bad):
     )
     assert resp.status_code == 302 and "/end" in resp.headers["Location"]
     assert Result.query.filter_by(game_night_game_id=gng.id).count() == 0
+
+
+# --- finalize / reopen are explicit, not a toggle -----------------------------
+
+
+def _played_night(w):
+    host, ann = w.person("Host"), w.person("Ann")
+    gn = w.night(host, ann, host=host, address="1 Main St")
+    w.play(gn, positions={host: 1, ann: 2})
+    return host, ann, gn
+
+
+def test_finalizing_twice_keeps_the_night_final(client, w):
+    from app.models import PersonBadge
+
+    host, ann, gn = _played_night(w)
+    login(client, host)
+    resp = client.post(f"/game_night/{gn.id}/finalize")
+    assert resp.status_code == 302 and "finalized=1" in resp.headers["Location"]
+    _db.session.refresh(gn)
+    assert gn.final and gn.address is None
+    badges = PersonBadge.query.filter_by(game_night_id=gn.id).count()
+    assert badges > 0
+
+    # A double-click or a second tab posts again: still final, badges kept.
+    resp = client.post(f"/game_night/{gn.id}/finalize")
+    assert resp.status_code == 302 and "finalized=1" not in resp.headers["Location"]
+    _db.session.refresh(gn)
+    assert gn.final
+    assert PersonBadge.query.filter_by(game_night_id=gn.id).count() == badges
+
+
+def test_unfinalize_is_explicit_and_idempotent(client, w):
+    from app.models import PersonBadge
+
+    host, ann, gn = _played_night(w)
+    login(client, host)
+    client.post(f"/game_night/{gn.id}/finalize")
+    client.post(f"/game_night/{gn.id}/unfinalize")
+    _db.session.refresh(gn)
+    assert not gn.final
+    assert PersonBadge.query.filter_by(game_night_id=gn.id).count() == 0
+    client.post(f"/game_night/{gn.id}/unfinalize")
+    _db.session.refresh(gn)
+    assert not gn.final
+
+
+def test_toggle_route_no_longer_flips_final(client, w):
+    host, ann, gn = _played_night(w)
+    login(client, host)
+    client.post(f"/game_night/{gn.id}/finalize")
+    client.post(f"/game_night/{gn.id}/toggle/final")
+    _db.session.refresh(gn)
+    assert gn.final
+
+
+def test_players_cannot_finalize(client, w):
+    host, ann, gn = _played_night(w)
+    login(client, ann)
+    client.post(f"/game_night/{gn.id}/finalize")
+    _db.session.refresh(gn)
+    assert not gn.final

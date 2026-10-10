@@ -237,45 +237,71 @@ def get_log_results_data(game_night_game_id):
     return game_night_game, players, existing_results
 
 
-_TOGGLEABLE_FIELDS = {"final", "closed"}
+_TOGGLEABLE_FIELDS = {"closed"}
 
 
 def toggle_game_night_field(game_night_id, field):
-    """Toggle boolean fields in a game night (e.g., final results, voting)."""
+    """Toggle voting open/closed. (Finalizing has its own finalize/unfinalize.)"""
     if field not in _TOGGLEABLE_FIELDS:
         return False, "Invalid field."
 
     game_night = GameNight.query.get_or_404(game_night_id)
     setattr(game_night, field, not getattr(game_night, field))
-    if field == "final" and game_night.final:
-        game_night.address = None  # the night is over: don't keep where it was
-
-    if field == "final" and getattr(game_night, field) is False:
-        # Clear night-triggered badges so re-finalization starts clean
-        PersonBadge.query.filter_by(game_night_id=game_night_id).delete()
+    if game_night.closed:
+        # Closing voting closes the night's linked polls too.
+        for poll in game_night.polls:
+            poll.closed = True
 
     db.session.commit()
-
-    # Closing voting or finalizing closes the night's linked polls too.
-    if field in ("final", "closed") and getattr(game_night, field) is True:
-        open_polls = [p for p in game_night.polls if not p.closed]
-        for poll in open_polls:
-            poll.closed = True
-        if open_polls:
-            db.session.commit()
-
-    if field == "final" and getattr(game_night, field) is True:
-        try:
-            from app.services.badge_services import evaluate_badges_for_night
-
-            evaluate_badges_for_night(game_night_id)
-        except Exception:
-            logger.exception("Badge evaluation failed for game night %s", game_night_id)
-
     return (
         True,
         f"{field.replace('_', ' ').capitalize()} has been {'enabled' if getattr(game_night, field) else 'disabled'}.",
     )
+
+
+def _locked_night(game_night_id):
+    """The night, row-locked so two finalize/reopen requests can't interleave."""
+    return (
+        GameNight.query.filter_by(id=game_night_id)
+        .with_for_update()
+        .populate_existing()
+        .first_or_404()
+    )
+
+
+def finalize(game_night_id):
+    """Lock the night's results and award badges. Returns (changed, message);
+    finalizing a night that's already final changes nothing."""
+    game_night = _locked_night(game_night_id)
+    if game_night.final:
+        db.session.rollback()
+        return False, "This game night is already finalized."
+    game_night.final = True
+    game_night.address = None  # the night is over: don't keep where it was
+    for poll in game_night.polls:
+        poll.closed = True
+    db.session.commit()
+
+    try:
+        from app.services.badge_services import evaluate_badges_for_night
+
+        evaluate_badges_for_night(game_night_id)
+    except Exception:
+        logger.exception("Badge evaluation failed for game night %s", game_night_id)
+    return True, "Game night finalized. Badges are awarded."
+
+
+def unfinalize(game_night_id):
+    """Reopen a finalized night; its badges are removed until it's finalized
+    again. Returns (changed, message)."""
+    game_night = _locked_night(game_night_id)
+    if not game_night.final:
+        db.session.rollback()
+        return False, "This game night isn't finalized."
+    game_night.final = False
+    PersonBadge.query.filter_by(game_night_id=game_night_id).delete()
+    db.session.commit()
+    return True, "Game night reopened. Its badges were removed until it's finalized again."
 
 
 def determine_top_places(game_night_id):
