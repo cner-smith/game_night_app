@@ -8,6 +8,7 @@ from app.models import (  # noqa: F401 — partial imports used by later functio
     TrackerValue,
     tracker_team_players,
 )
+from app.services import night_policy
 
 GLOBAL_FIELD_TYPES = {"global_counter", "global_notes"}
 PER_PLAYER_FIELD_TYPES = {"counter", "checkbox", "player_notes"}
@@ -111,6 +112,7 @@ def launch_session(session_id, *, mode, teams_data, player_ids, field_order=None
     session = TrackerSession.query.get_or_404(session_id)
     if session.status != "configuring":
         raise ValueError("Only sessions in 'configuring' status can be launched")
+    night_policy.require_editable(session.game_night_game.game_night)
 
     # Require at least one score field before launch
     score_field = TrackerField.query.filter_by(
@@ -178,6 +180,7 @@ def update_value(session_id, field_id, *, entity_type, entity_id=None, delta=Non
     session = TrackerSession.query.get(session_id)
     if session is None or session.status != "active":
         raise ValueError("Values can only be updated for sessions in 'active' status")
+    night_policy.require_editable(session.game_night_game.game_night)
 
     # Validate field belongs to this session
     field = TrackerField.query.filter_by(id=field_id, tracker_session_id=session_id).first()
@@ -277,6 +280,7 @@ def save_results(session_id, rankings):
         raise ValueError(f"TrackerSession {session_id} not found")
     if session.status != "active":
         raise ValueError("Results can only be saved for sessions in 'active' status")
+    night_policy.require_editable(session.game_night_game.game_night)
 
     gng_id = session.game_night_game_id
 

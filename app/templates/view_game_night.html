@@ -105,7 +105,6 @@
   {% include "_night_polls.html" %}
 
   <!-- Choosing games: nominate + rank -->
-  {% set voting_open = not game_night.closed %}
   {% if voting_open or nominations %}
   {% set ranked = user_votes | length %}
   <div id="games" class="bg-white rounded-xl border border-stone-200 shadow-sm p-5">

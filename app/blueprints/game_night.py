@@ -9,6 +9,7 @@ from app.services import (
     food_services,
     game_night_services,
     game_picker_services,
+    night_policy,
     photo_services,
     poll_services,
 )
@@ -99,7 +100,8 @@ def view_game_night(game_night_id):
         if poll_services.can_view(poll, current_user)
     ]
     game_night = context["game_night"]
-    context["can_manage"] = game_night.managed_by(current_user)
+    context["can_manage"] = night_policy.can_manage(game_night, current_user)
+    context["voting_open"] = night_policy.voting_open(game_night)
     context["can_upload_photos"] = photo_services.can_upload(game_night, current_user)
     if game_night.food_mode != "none":
         context["food_rows"] = food_services.expense_rows(game_night, current_user)

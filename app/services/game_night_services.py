@@ -23,7 +23,7 @@ from app.models import (
     Wishlist,
     db,
 )
-from app.services import food_services, poll_services
+from app.services import food_services, night_policy, poll_services
 from app.services.admin_services import get_all_people
 
 logger = logging.getLogger(__name__)
@@ -102,6 +102,11 @@ def edit_game_night(
     date = parse_date(date_str)
     if not date:
         return False, "Invalid date format. Please use YYYY-MM-DD."
+    if not night_policy.is_editable(game_night) and (
+        date != game_night.date
+        or {int(i) for i in attendees_ids} != {p.people_id for p in game_night.players}
+    ):
+        return False, night_policy.FINAL_MESSAGE + " (Its date and players are locked.)"
 
     game_night.date = date
     game_night.notes = notes
@@ -160,6 +165,12 @@ def manage_game_in_night(
     game_night_id, game_id, action="add", round_number=None, game_night_game_id=None
 ):
     """Add or remove a game from a game night."""
+    game_night = GameNight.query.get_or_404(game_night_id)
+    try:
+        night_policy.require_editable(game_night)
+    except night_policy.NightRuleError as e:
+        return False, str(e)
+
     if action == "add":
         if not game_id or not round_number:
             return False, "Please select a game and round number."
@@ -187,6 +198,10 @@ def manage_game_in_night(
 def log_results(game_night_id, game_night_game_id, scores_positions):
     """Log results for a game night game."""
     GameNightGame.query.filter_by(game_night_id=game_night_id, id=game_night_game_id).first_or_404()
+    try:
+        night_policy.require_editable(GameNight.query.get_or_404(game_night_id))
+    except night_policy.NightRuleError as e:
+        return False, str(e)
 
     for player_id, data in scores_positions.items():
         user_id = int(data["user_id"])

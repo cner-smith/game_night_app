@@ -1,14 +1,29 @@
 from app.models import (
     Game,
+    GameNight,
     GameNominations,
     GameVotes,
     Player,
     db,
 )
+from app.services import night_policy
+
+
+def _voting_error(game_night_id):
+    """Why nominating or ranking isn't allowed right now, or None."""
+    try:
+        night_policy.require_voting_open(GameNight.query.get_or_404(game_night_id))
+    except night_policy.NightRuleError as e:
+        return str(e)
+    return None
 
 
 def nominate_game(game_night_id, user_id, game_id):
     """Handles nomination of a game for an upcoming game night."""
+    error = _voting_error(game_night_id)
+    if error:
+        return False, error
+
     current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=user_id).first()
 
     if not current_player:
@@ -50,6 +65,10 @@ def nominate_game(game_night_id, user_id, game_id):
 
 def vote_game(game_night_id, user_id, votes_dict):
     """Handles voting for nominated games in a game night."""
+    error = _voting_error(game_night_id)
+    if error:
+        return False, error
+
     current_player = Player.query.filter_by(game_night_id=game_night_id, people_id=user_id).first()
 
     if not current_player:
