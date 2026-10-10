@@ -12,6 +12,7 @@ from app.services import (
     tracker_services,
     voting_services,
 )
+from app.services.night_policy import NightRuleError
 from tests.night_world import World
 
 
@@ -134,10 +135,10 @@ def test_nominate_and_vote_refused_on_final_night(w):
     a = w.person("Ann")
     gn = w.night(a, final=True)
     game = w.game()
-    ok, msg = voting_services.nominate_game(gn.id, a.id, game.id)
-    assert not ok and "finalized" in msg
-    ok, msg = voting_services.vote_game(gn.id, a.id, {game.id: 1})
-    assert not ok and "finalized" in msg
+    with pytest.raises(NightRuleError, match="finalized"):
+        voting_services.nominate_game(gn.id, a.id, game.id)
+    with pytest.raises(NightRuleError, match="finalized"):
+        voting_services.vote_game(gn.id, a.id, {game.id: 1})
     assert GameNominations.query.filter_by(game_night_id=gn.id).count() == 0
     assert GameVotes.query.filter_by(game_night_id=gn.id).count() == 0
 
@@ -149,10 +150,10 @@ def test_nominate_and_vote_refused_when_voting_closed(w):
     a = w.person("Ann")
     gn = w.night(a, closed=True)
     game = w.game()
-    ok, msg = voting_services.nominate_game(gn.id, a.id, game.id)
-    assert not ok and "closed" in msg
-    ok, msg = voting_services.vote_game(gn.id, a.id, {game.id: 1})
-    assert not ok and "closed" in msg
+    with pytest.raises(NightRuleError, match="closed"):
+        voting_services.nominate_game(gn.id, a.id, game.id)
+    with pytest.raises(NightRuleError, match="closed"):
+        voting_services.vote_game(gn.id, a.id, {game.id: 1})
     assert GameNominations.query.filter_by(game_night_id=gn.id).count() == 0
     assert GameVotes.query.filter_by(game_night_id=gn.id).count() == 0
 

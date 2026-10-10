@@ -3,19 +3,32 @@ from flask_login import current_user, login_required
 
 from app.extensions import db
 from app.services import voting_services
+from app.services.errors import ServiceError
 from app.utils import flash_if_no_action, game_night_access_required
+from app.utils.errors import service_error_response
 
 voting_bp = Blueprint("voting", __name__)
+
+
+@voting_bp.errorhandler(ServiceError)
+def _refused(error):
+    """Nominating and ranking happen on the night page; go back there."""
+    return service_error_response(
+        error,
+        redirect_to=url_for(
+            "game_night.view_game_night", game_night_id=request.view_args["game_night_id"]
+        ),
+    )
 
 
 @voting_bp.route("/game_night/<int:game_night_id>/nominate", methods=["POST"])
 @login_required
 @game_night_access_required
 def nominate_game(game_night_id):
-    success, message = voting_services.nominate_game(
+    message = voting_services.nominate_game(
         game_night_id, current_user.id, request.form.get("game_id")
     )
-    flash(message, "success" if success else "error")
+    flash(message, "success")
 
     context = {"game_night_id": game_night_id}
     return redirect(url_for("game_night.view_game_night", **context))
@@ -67,8 +80,8 @@ def vote_game(game_night_id):
             else:
                 votes_dict[game_id] = None
 
-    success, message = voting_services.vote_game(game_night_id, current_user.id, votes_dict)
-    flash(message, "success" if success else "error")
+    message = voting_services.vote_game(game_night_id, current_user.id, votes_dict)
+    flash(message, "success")
 
     context = {"game_night_id": game_night_id}
     return redirect(url_for("game_night.view_game_night", **context))
