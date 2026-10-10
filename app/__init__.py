@@ -98,6 +98,9 @@ def create_app(config_class=None):
     init_extensions(app)
     register_user_loader(app)
     register_blueprints(app)
+    from app.cli import badges_cli
+
+    app.cli.add_command(badges_cli)
     start_schedulers(app)
 
     app.jinja_env.filters["strip_html"] = _strip_html

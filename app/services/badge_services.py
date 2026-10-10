@@ -816,6 +816,92 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
         logger.exception("Badge evaluation failed for game night %s", game_night_id)
 
 
+def recheck_badges(apply: bool) -> list[dict]:
+    """Re-judge every finalized night, oldest first, with the current rules.
+
+    Works out which badges each person should hold and the first night that
+    earned each one, then compares with what's stored: awards that no longer
+    qualify are removed, missing ones are added (dated to that first night),
+    and awards that still qualify are left exactly as they are. Badges with
+    no checker are ignored. Unlike finalizing a night, a checker error is
+    raised, so a failing check can never read as "doesn't qualify" and
+    remove an award. With apply=False nothing is written.
+
+    Returns one entry per badge with changes, in badge order:
+    {"badge": name, "added": [(person name, night date)], "removed": [person name]}.
+    """
+    badges = {
+        b.key: b for b in db.session.query(Badge).filter(Badge.key.in_(_BADGE_REGISTRY)).all()
+    }
+    nights = (
+        db.session.query(GameNight)
+        .filter(GameNight.final.is_(True))
+        .order_by(GameNight.date, GameNight.id)
+        .all()
+    )
+
+    should: dict[tuple[int, int], GameNight] = {}  # (person, badge) -> first night
+    for night in nights:
+        person_ids = [
+            pid for (pid,) in db.session.query(Player.people_id).filter_by(game_night_id=night.id)
+        ]
+        for key, checker in _BADGE_REGISTRY.items():
+            badge = badges.get(key)
+            if badge is None:
+                continue
+            for person_id in person_ids:
+                if (person_id, badge.id) not in should and checker(person_id, night.id):
+                    should[(person_id, badge.id)] = night
+
+    held = {
+        (pb.person_id, pb.badge_id): pb
+        for pb in db.session.query(PersonBadge)
+        .filter(PersonBadge.badge_id.in_([b.id for b in badges.values()]))
+        .all()
+    }
+    to_add = [k for k in should if k not in held]
+    to_remove = [pb for k, pb in held.items() if k not in should]
+
+    names = {
+        p.id: p.full_name
+        for p in db.session.query(Person).filter(
+            Person.id.in_({pid for pid, _ in to_add} | {pb.person_id for pb in to_remove})
+        )
+    }
+    changes: dict[int, dict] = {}
+
+    def entry(badge_id):
+        return changes.setdefault(badge_id, {"added": [], "removed": []})
+
+    for person_id, badge_id in to_add:
+        entry(badge_id)["added"].append((names[person_id], should[(person_id, badge_id)].date))
+    for pb in to_remove:
+        entry(pb.badge_id)["removed"].append(names[pb.person_id])
+
+    if apply:
+        for person_id, badge_id in to_add:
+            db.session.add(
+                PersonBadge(
+                    person_id=person_id,
+                    badge_id=badge_id,
+                    game_night_id=should[(person_id, badge_id)].id,
+                )
+            )
+        for pb in to_remove:
+            db.session.delete(pb)
+        db.session.commit()
+
+    by_id = {b.id: b for b in badges.values()}
+    return [
+        {
+            "badge": by_id[badge_id].name,
+            "added": sorted(c["added"], key=lambda a: (a[1], a[0])),
+            "removed": sorted(c["removed"]),
+        }
+        for badge_id, c in sorted(changes.items())
+    ]
+
+
 def get_person_badges(person_id: int) -> list:
     """Return all earned badges for a person, newest night first."""
     return (

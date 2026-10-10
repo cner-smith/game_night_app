@@ -314,6 +314,8 @@ A night can have an optional `address`. Only people who can open the night see i
 
 26 badges are automatically evaluated when a game night is **finalized** (marked as complete). The evaluation runs in `app/services/badge_services.py`.
 
+After changing a badge rule, run `flask badges recheck --dry-run` to see which awards would be added or removed when every finalized night is re-judged in date order, then `flask badges recheck` to save those changes in one transaction. Awards that still qualify are left as they are.
+
 | Badge | Trigger |
 |-------|---------|
 | First Blood | Win your first game |
