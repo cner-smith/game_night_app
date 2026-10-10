@@ -147,6 +147,8 @@ Tests live in `tests/` and are split by layer:
 - `tests/blueprints/` — route-level integration tests
 - `tests/services/` — service-layer unit/integration tests
 
+Migrations run once per session. Each test then runs inside one transaction that's rolled back when it ends (the `_rollback_after_test` fixture in `tests/conftest.py`): `db.session.commit()` and `rollback()` become savepoint operations, so code under test behaves as usual but nothing a test writes reaches the next test, even if it fails before cleaning up. Server-side `now()` stays fixed for the whole test, and ids aren't reused (sequences don't roll back). A test that needs another connection or process to see its rows is marked `@pytest.mark.real_commits`; it commits for real and must clean up after itself (`tests/services/test_unique_races.py` does).
+
 CI runs them with:
 
 ```bash

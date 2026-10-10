@@ -182,6 +182,9 @@ def test_deleting_a_night_deletes_its_rsvp_poll_and_closes_linked_polls(w):
 # --- picking a date-poll date twice -------------------------------------------
 
 
+# The "first request" updates the poll from a second connection, which can't see
+# the poll while it is uncommitted in the per-test transaction.
+@pytest.mark.real_commits
 def test_pick_date_rechecks_the_poll_under_a_lock(w):
     """A second pick (double-submit) holding a stale copy of the poll must see
     the first pick and not create another night."""
