@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime
 
 from sqlalchemy import func
@@ -5,6 +6,23 @@ from sqlalchemy import func
 from app.extensions import bcrypt
 from app.models import Person, db
 from app.utils import send_email
+
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_BYTES = 72  # bcrypt refuses anything longer
+
+
+def password_problem(password):
+    """What's wrong with a new password, or None if it's fine. The one rule
+    for signup, reset, and changing it from the profile."""
+    if not password or len(password) < PASSWORD_MIN_LENGTH:
+        return f"Use at least {PASSWORD_MIN_LENGTH} characters for your password."
+    if len(password.encode("utf-8")) > PASSWORD_MAX_BYTES:
+        return "That password is too long; keep it under 70 characters."
+    return None
+
+
+def hash_password(password):
+    return bcrypt.generate_password_hash(password).decode("utf-8")
 
 
 def login(email, password):
@@ -29,6 +47,10 @@ def signup(first_name, last_name, email, password):
     first_name = first_name.strip().lower()
     last_name = last_name.strip().lower()
 
+    problem = password_problem(password)
+    if problem:
+        return False, problem
+
     # Email already taken by any user
     if Person.query.filter(func.lower(Person.email) == email).first():
         return False, "An account with this email already exists."
@@ -52,7 +74,7 @@ def signup(first_name, last_name, email, password):
 
     # Set email and password
     user.email = email
-    user.password = bcrypt.generate_password_hash(password).decode("utf-8")
+    user.password = hash_password(password)
     user.temp_pass = False
     db.session.commit()
 
@@ -70,10 +92,16 @@ def _reset_serializer():
     return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt="password-reset")
 
 
+def _password_fingerprint(user):
+    """A digest of the stored password hash: changes whenever the password
+    does, without putting any of the hash itself in a readable token."""
+    return hashlib.sha256((user.password or "").encode("utf-8")).hexdigest()[:32]
+
+
 def make_reset_token(user):
-    # Includes part of the current password hash, so the link stops working
+    # Carries a fingerprint of the current password, so the link stops working
     # once the password has been changed (i.e. it can only be used once).
-    return _reset_serializer().dumps({"id": user.id, "pw": (user.password or "")[-12:]})
+    return _reset_serializer().dumps({"id": user.id, "pw": _password_fingerprint(user)})
 
 
 def user_for_reset_token(token):
@@ -85,7 +113,7 @@ def user_for_reset_token(token):
     except (BadSignature, SignatureExpired):
         return None
     user = db.session.get(Person, data.get("id"))
-    if user is None or not user.active or (user.password or "")[-12:] != data.get("pw"):
+    if user is None or not user.active or _password_fingerprint(user) != data.get("pw"):
         return None
     return user
 
@@ -115,11 +143,12 @@ def forgot_password(email):
 
 
 def reset_password(user, new_password, confirm_password):
-    if not new_password or len(new_password) < 8:
-        return False, "Use at least 8 characters."
+    problem = password_problem(new_password)
+    if problem:
+        return False, problem
     if new_password != confirm_password:
         return False, "The passwords don't match."
-    user.password = bcrypt.generate_password_hash(new_password).decode("utf-8")
+    user.password = hash_password(new_password)
     user.temp_pass = False
     user.temp_pass_expires_at = None
     db.session.commit()
@@ -128,13 +157,16 @@ def reset_password(user, new_password, confirm_password):
 
 def update_password(user, current_password, new_password, confirm_password):
     """Update user password if the current password is correct."""
-    if not bcrypt.check_password_hash(user.password, current_password):
+    if not user.password or not bcrypt.check_password_hash(user.password, current_password or ""):
         return False, "Current password is incorrect."
 
+    problem = password_problem(new_password)
+    if problem:
+        return False, problem
     if new_password != confirm_password:
         return False, "New passwords do not match."
 
-    user.password = bcrypt.generate_password_hash(new_password).decode("utf-8")
+    user.password = hash_password(new_password)
     user.temp_pass = False
     user.temp_pass_expires_at = None
     db.session.commit()
@@ -162,9 +194,12 @@ def update_profile(user, current_password, email, new_password, confirm_password
         user.email = email
 
     if new_password:
+        problem = password_problem(new_password)
+        if problem:
+            return False, problem
         if new_password != confirm_password:
             return False, "New passwords do not match."
-        user.password = bcrypt.generate_password_hash(new_password).decode("utf-8")
+        user.password = hash_password(new_password)
         user.temp_pass = False
         user.temp_pass_expires_at = None
 
