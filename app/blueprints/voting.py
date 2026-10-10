@@ -1,7 +1,6 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.extensions import db
 from app.services import voting_services
 from app.services.errors import ServiceError
 from app.utils import flash_if_no_action, game_night_access_required
@@ -39,15 +38,11 @@ def nominate_game(game_night_id):
 @game_night_access_required
 def nominate_game_page(game_night_id):
     """Show a page where user can visually nominate a game."""
-    from app.models import GameNight, GameNominations, Player
-    from app.services import game_picker_services
+    from app.services import game_night_services, game_picker_services
 
-    game_night = db.get_or_404(GameNight, game_night_id)
+    game_night = game_night_services.get_game_night_by_id(game_night_id)
     items, player_count = game_picker_services.picker_items(game_night, current_user.id)
-    me = Player.query.filter_by(game_night_id=game_night_id, people_id=current_user.id).first()
-    mine = (
-        me and GameNominations.query.filter_by(game_night_id=game_night_id, player_id=me.id).first()
-    )
+    mine = voting_services.my_nomination(game_night_id, current_user.id)
     my_game_id = mine.game_id if mine else None
     # Games someone else nominated can't be nominated again.
     available = [i for i in items if not i["nominated_by"] or i["game"].id == my_game_id]

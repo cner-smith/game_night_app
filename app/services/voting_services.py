@@ -83,6 +83,15 @@ def nominate_game(game_night_id, user_id, game_id):
     return message
 
 
+def my_nomination(game_night_id, user_id):
+    """This person's nomination on the night, or None."""
+    return (
+        GameNominations.query.join(Player, GameNominations.player_id == Player.id)
+        .filter(GameNominations.game_night_id == game_night_id, Player.people_id == user_id)
+        .first()
+    )
+
+
 def _raced_nomination(game_night_id, player_id, game_id, name):
     winner = GameNominations.query.filter_by(game_night_id=game_night_id, game_id=game_id).first()
     if winner is not None and winner.player_id == player_id:

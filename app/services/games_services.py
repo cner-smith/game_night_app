@@ -300,6 +300,23 @@ def modify_wishlist(user_id, game_id, add=False, remove=False):
     return False, "Game not found in your wishlist."
 
 
+def toggle_wishlist(user_id, game_id):
+    """Wishlist a game, or take it off; owned games can't be wishlisted.
+    Returns (flash category, message)."""
+    if OwnedBy.query.filter_by(game_id=game_id, person_id=user_id).first():
+        return "info", "You already own this game — no need to wishlist it."
+    on_it = Wishlist.query.filter_by(game_id=game_id, person_id=user_id).first() is not None
+    success, message = modify_wishlist(user_id, game_id, add=not on_it, remove=on_it)
+    return ("success" if success else "error"), message
+
+
+def assignable_owners(game):
+    """Active people who don't own this game yet, for the admin's owner picker."""
+    owned_ids = {ob.person_id for ob in game.owners}
+    people = Person.query.filter_by(active=True).order_by(Person.first_name, Person.last_name)
+    return [p for p in people if p.id not in owned_ids]
+
+
 def modify_ownership(person_id, game_id, add=True, *, actor_is_self=True):
     """Modify ownership of a game for the given person.
 
