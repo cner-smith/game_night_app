@@ -6,7 +6,6 @@ import pytz
 from flask import Blueprint, current_app, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.models import TrackerSession
 from app.services import (
     admin_services,
     food_services,
@@ -15,6 +14,7 @@ from app.services import (
     night_policy,
     photo_services,
     poll_services,
+    tracker_services,
 )
 from app.services.errors import ServiceError
 from app.utils import game_night_access_required, host_required, night_manager_required
@@ -97,21 +97,9 @@ def quick_add_person():
 def view_game_night(game_night_id):
     """View the details of a specific game night."""
     context = game_night_services.get_view_game_night_details(game_night_id, current_user.id)
-    game_night_games = context.get("game_night_games", [])
-    tracker_sessions = (
-        {
-            ts.game_night_game_id: ts
-            for ts in TrackerSession.query.filter(
-                TrackerSession.game_night_game_id.in_(
-                    [gng.game_night_game_id for gng in game_night_games]
-                ),
-                TrackerSession.status.in_(["configuring", "active"]),
-            ).all()
-        }
-        if game_night_games
-        else {}
+    context["tracker_sessions"] = tracker_services.open_sessions_by_game(
+        [gng.game_night_game_id for gng in context.get("game_night_games", [])]
     )
-    context["tracker_sessions"] = tracker_sessions
     context["night_polls"] = [
         poll_services.view_context(poll, current_user.id)
         for poll in context["game_night"].polls

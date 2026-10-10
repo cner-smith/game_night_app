@@ -22,6 +22,19 @@ _NOTES_MAX_LEN = 500
 DEFAULT_SCORE_LABEL = "Score"
 
 
+def open_sessions_by_game(game_night_game_ids):
+    """{game_night_game_id: session} for trackers being set up or played."""
+    if not game_night_game_ids:
+        return {}
+    return {
+        ts.game_night_game_id: ts
+        for ts in TrackerSession.query.filter(
+            TrackerSession.game_night_game_id.in_(game_night_game_ids),
+            TrackerSession.status.in_(["configuring", "active"]),
+        )
+    }
+
+
 def get_or_create_configuring_session(game_night_game_id):
     """Return the existing configuring session or create a fresh one."""
     session = TrackerSession.query.filter_by(
