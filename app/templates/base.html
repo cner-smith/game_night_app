@@ -11,19 +11,8 @@
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='images/apple-touch-icon.png') }}" />
   <link rel="manifest" href="{{ url_for('static', filename='images/site.webmanifest') }}" />
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: { DEFAULT: '#dc2626', hover: '#b91c1c' }
-          }
-        }
-      }
-    }
-  </script>
+  <!-- Tailwind, built by scripts/build_css.sh (and again in the Dockerfile) -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css') }}" />
 
   <!-- HTMX CDN (used in Phase 2+) -->
   <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
