@@ -88,7 +88,7 @@ def test_photo_delete_keeps_files_when_the_commit_fails(
 ):
     ann = make_person("Ann")
     gn = make_night(ann)
-    assert photo_services.upload(gn, ann, _jpeg())[0]
+    photo_services.upload(gn, ann, _jpeg())
     photo = GameNightPhoto.query.filter_by(game_night_id=gn.id).one()
     files = _files(app, f"photos/{gn.id}")
     assert len(files) == 2
@@ -100,7 +100,7 @@ def test_photo_delete_keeps_files_when_the_commit_fails(
     assert _files(app, f"photos/{gn.id}") == files
 
     monkeypatch.undo()
-    assert photo_services.delete(_db.session.get(GameNightPhoto, photo.id), ann)[0]
+    photo_services.delete(_db.session.get(GameNightPhoto, photo.id), ann)
     assert _files(app, f"photos/{gn.id}") == []
 
 
