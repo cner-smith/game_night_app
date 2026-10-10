@@ -252,7 +252,11 @@ Always review the auto-generated migration before applying it — Alembic someti
                                                                                             └─ r5s6t7u8v9w0  night_hosts
                                                                                                  └─ s6t7u8v9w0x1  night_address
                                                                                                       └─ t7u8v9w0x1y2  badge_rules_match_checks
-                                                                                                           └─ u8v9w0auth01  session_tokens_and_auth_throttle
+                                                                                                           └─ u8c1a2s3c4d5  tracker_player_fk_cascade
+                                                                                                                └─ u8c2u3n4i5q6  one_row_per_thing
+                                                                                                                     └─ u8c3v4i5e6w7  drop_unused_night_list_views
+                                                                                                                          └─ u8c4r5a6n7k8  rankings_count_every_place
+                                                                                                                               └─ u8v9w0auth01  session_tokens_and_auth_throttle
 ```
 
 ### Existing Production Database (Brownfield Setup)

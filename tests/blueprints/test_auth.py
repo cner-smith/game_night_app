@@ -64,8 +64,8 @@ def test_logout_redirects(auth_client):
     assert resp.status_code == 302
 
 
-def test_signup_post_creates_user(client, db):
-    """Signup without an invite link makes a new person and redirects."""
+def test_signup_without_invite_is_refused(client, db):
+    """Sign-up is invite-only: no link, no account."""
     from app.models import Person
 
     resp = client.post(
@@ -76,16 +76,15 @@ def test_signup_post_creates_user(client, db):
             "email": "newsignup@example.com",
             "password": "password123",
         },
-        follow_redirects=False,
+        follow_redirects=True,
     )
-    assert resp.status_code == 302
-
-    person = Person.query.filter_by(email="newsignup@example.com").first()
-    assert person is not None and person.first_name == "New"
-
-    _db.session.rollback()
-    Person.query.filter_by(email="newsignup@example.com").delete()
-    _db.session.commit()
+    try:
+        assert b"Sign-up is by invite" in resp.data
+        assert Person.query.filter_by(email="newsignup@example.com").first() is None
+    finally:
+        _db.session.rollback()
+        Person.query.filter_by(email="newsignup@example.com").delete()
+        _db.session.commit()
 
 
 def test_signup_post_duplicate_email(client, registered_user):

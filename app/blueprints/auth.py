@@ -51,8 +51,8 @@ def logout():
 @auth_bp.route("/signup", methods=["GET", "POST"])
 @flash_if_no_action("Please provide all required fields to sign up.", "error")
 def signup():
-    """Sign up. From an invite link (?invite=...) this claims the person the
-    link was made for; otherwise it makes a new account."""
+    """Sign up from an invite link (?invite=...), claiming the person it was
+    made for. Without one the page only explains how to get a link."""
     invite = request.values.get("invite") or None
     invitee = auth_services.person_for_invite(invite) if invite else None
     if invite and invitee is None:
@@ -63,11 +63,7 @@ def signup():
     if request.method == "POST":
         form = request.form
         success, message = auth_services.signup(
-            form.get("first_name"),
-            form.get("last_name"),
-            form.get("email"),
-            form.get("password"),
-            invite=invite,
+            form.get("email"), form.get("password"), invite=invite
         )
         flash(message, "success" if success else "error")
 

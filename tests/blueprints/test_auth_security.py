@@ -86,10 +86,11 @@ def test_profile_enforces_policy(client, make_person):
     assert ann.password == old
 
 
-def test_signup_enforces_policy():
+def test_signup_enforces_policy(make_stub):
     from app.services import auth_services
 
-    ok, message = auth_services.signup("Shorty", "Pw", "shorty@test.invalid", "abc")
+    invite = auth_services.make_invite_token(make_stub("Shorty", "Pw"))
+    ok, message = auth_services.signup("shorty@test.invalid", "abc", invite=invite)
     assert not ok and "at least 8 characters" in message
 
 
@@ -286,17 +287,22 @@ def test_signup_by_name_never_claims_an_existing_person(client, db, make_stub):
     assert Person.query.filter_by(email="someone.else@test.invalid").count() == 0
 
 
-def test_signup_without_invite_creates_a_new_member(client, db):
+def test_signup_without_invite_creates_nobody(client, db):
     from app.models import Person
 
     try:
         resp = _signup(client, first_name="Brand", last_name="Newcomer")
-        assert b"You can now log in" in resp.data
-        person = Person.query.filter_by(email="someone.else@test.invalid").one()
-        assert (person.first_name, person.last_name) == ("Brand", "Newcomer")
-        assert not (person.admin or person.owner or person.can_host)
+        assert b"Sign-up is by invite" in resp.data
+        assert Person.query.filter_by(email="someone.else@test.invalid").count() == 0
+        assert Person.query.filter_by(first_name="Brand", last_name="Newcomer").count() == 0
     finally:
         _cleanup_email(db, "someone.else@test.invalid")
+
+
+def test_signup_page_without_invite_shows_no_form(client, db):
+    resp = client.get("/signup")
+    assert b"Sign-up is by invite" in resp.data
+    assert b'name="password"' not in resp.data
 
 
 def _invite_from(page):
@@ -314,7 +320,7 @@ def test_invite_link_claims_that_person_with_their_rights(admin_client, db, make
     client = admin_client
     try:
         page = client.get(f"/signup?invite={token}").get_data(as_text=True)
-        assert 'value="Invited"' in page and 'value="Admin"' in page
+        assert "invited as <strong>Invited Admin</strong>" in page
 
         resp = _signup(client, invite=token, first_name="Not", last_name="Me")
         assert b"You can now log in" in resp.data

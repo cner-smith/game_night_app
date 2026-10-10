@@ -1,7 +1,7 @@
 """people.session_token and the auth_throttle table
 
 Revision ID: u8v9w0auth01
-Revises: t7u8v9w0x1y2
+Revises: u8c4r5a6n7k8
 Create Date: 2026-10-09
 
 - people.session_token: part of the Flask-Login session id ("<id>:<token>").
@@ -16,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "u8v9w0auth01"
-down_revision = "t7u8v9w0x1y2"
+down_revision = "u8c4r5a6n7k8"
 branch_labels = None
 depends_on = None
 

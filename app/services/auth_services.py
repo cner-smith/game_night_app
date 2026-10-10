@@ -160,20 +160,21 @@ def invitable_people(user):
     return [p for p in unclaimed if can_invite(user, p)]
 
 
-def signup(first_name, last_name, email, password, invite=None):
-    """Create an account. With an invite link, claim that (unclaimed) person,
-    keeping any rights an admin gave them. Without one, always a new person:
-    a name never attaches to someone who's already here."""
-    email = (email or "").strip().lower()
-    first_name, last_name = (first_name or "").strip(), (last_name or "").strip()
+INVITE_ONLY = (
+    "Sign-up is by invite. Ask an admin or your host for your invite link, "
+    "then open it to create your account."
+)
 
-    person = None
-    if invite:
-        person = person_for_invite(invite)
-        if person is None:
-            return False, INVITE_USED
-    elif not first_name or not last_name:
-        return False, "Enter your first and last name."
+
+def signup(email, password, invite=None):
+    """Claim the (unclaimed) person an invite link was made for, keeping any
+    rights an admin gave them. Sign-up is invite-only: no link, no account."""
+    if not invite:
+        return False, INVITE_ONLY
+    person = person_for_invite(invite)
+    if person is None:
+        return False, INVITE_USED
+    email = (email or "").strip().lower()
     if not email or "@" not in email:
         return False, "Enter a valid email address."
     problem = password_problem(password)
@@ -184,29 +185,6 @@ def signup(first_name, last_name, email, password, invite=None):
             False,
             "An account with this email already exists. Sign in, or reset your password.",
         )
-
-    if person is None:
-        namesake = Person.query.filter(
-            func.lower(Person.first_name) == first_name.lower(),
-            func.lower(Person.last_name) == last_name.lower(),
-        ).first()
-        if namesake is not None:
-            if not namesake.active:
-                return False, (
-                    f"{namesake.full_name} was removed from the site. If that's you, ask an "
-                    "admin to restore you and send you an invite link."
-                )
-            if not namesake.email:
-                return False, (
-                    f"{namesake.full_name} is already on the list here. If that's you, ask "
-                    "an admin or your host for your invite link and sign up from it."
-                )
-            return False, (
-                f"Someone called {namesake.full_name} already has an account. If that's "
-                "you, sign in or reset your password; if not, add a middle initial."
-            )
-        person = Person(first_name=first_name, last_name=last_name)
-        db.session.add(person)
 
     person.email = email
     person.password = hash_password(password)
