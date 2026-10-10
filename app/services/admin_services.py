@@ -86,8 +86,6 @@ def remove_user(user_id, current_user_id):
         user.email = None
         user.password = None
         user.admin = False
-        user.temp_pass = False
-        user.temp_pass_expires_at = None
         db.session.commit()
         return (
             True,

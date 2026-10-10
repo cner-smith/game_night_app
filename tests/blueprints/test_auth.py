@@ -87,7 +87,6 @@ def test_signup_post_creates_user(client, db):
 
     person = Person.query.filter_by(email="newsignup@example.com").first()
     assert person is not None
-    assert person.temp_pass is False
 
     _db.session.rollback()
     Person.query.filter_by(email="newsignup@example.com").delete()
@@ -141,13 +140,11 @@ def test_add_person_post(admin_client, db):
 
 
 def test_update_password_success(auth_client, db):
-    """update_password clears temp_pass and accepts new credentials."""
+    """update_password accepts new credentials."""
     from app.extensions import bcrypt
     from app.models import Person
 
     user = Person.query.filter_by(email="test@example.com").first()
-    user.temp_pass = True
-    _db.session.commit()
 
     resp = auth_client.post(
         "/update_password",
@@ -161,7 +158,6 @@ def test_update_password_success(auth_client, db):
     assert resp.status_code == 302
 
     _db.session.refresh(user)
-    assert user.temp_pass is False
     assert bcrypt.check_password_hash(user.password, "newpass123")
 
     # restore original password so auth_client teardown works
@@ -195,35 +191,6 @@ def test_update_password_mismatch(auth_client):
     )
     assert resp.status_code == 200
     assert b"New passwords do not match." in resp.data
-
-
-def test_login_redirects_to_update_password_with_temp_pass(client, db):
-    """A user with temp_pass=True is redirected to update_password after login."""
-    from app.extensions import bcrypt
-    from app.models import Person
-
-    temp_user = Person(
-        first_name="Temp",
-        last_name="Pass",
-        email="temppass@example.com",
-        password=bcrypt.generate_password_hash("tempword", rounds=4).decode(),
-        temp_pass=True,
-    )
-    _db.session.add(temp_user)
-    _db.session.commit()
-
-    try:
-        resp = client.post(
-            "/login",
-            data={"email": "temppass@example.com", "password": "tempword"},
-            follow_redirects=False,
-        )
-        assert resp.status_code == 302
-        assert "/update_password" in resp.headers["Location"]
-    finally:
-        _db.session.rollback()
-        Person.query.filter_by(email="temppass@example.com").delete()
-        _db.session.commit()
 
 
 def test_open_redirect_blocked(client, registered_user):

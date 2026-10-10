@@ -31,9 +31,6 @@ def login():
 
         if success:
             login_user(user)
-            if user.temp_pass:
-                flash("Please update your password.", "warning")
-                return redirect(url_for("auth.update_password"))
             return redirect(_safe_next(request.args.get("next")) or url_for("main.index"))
         else:
             flash(message, "error")

@@ -1,5 +1,4 @@
 import hashlib
-from datetime import datetime
 
 from sqlalchemy import func
 
@@ -31,12 +30,6 @@ def login(email, password):
         return False, "Enter your email and password.", None
     user = Person.query.filter(func.lower(Person.email) == email).first()
     if user and user.password and bcrypt.check_password_hash(user.password, password):
-        if (
-            user.temp_pass
-            and user.temp_pass_expires_at
-            and datetime.utcnow() > user.temp_pass_expires_at
-        ):
-            return False, "Your temporary password has expired. Please request a new one.", None
         return True, "Login successful.", user
     return False, "Invalid email or password.", None
 
@@ -75,7 +68,6 @@ def signup(first_name, last_name, email, password):
     # Set email and password
     user.email = email
     user.password = hash_password(password)
-    user.temp_pass = False
     db.session.commit()
 
     return True, "Signup completed successfully! You can now log in."
@@ -149,8 +141,6 @@ def reset_password(user, new_password, confirm_password):
     if new_password != confirm_password:
         return False, "The passwords don't match."
     user.password = hash_password(new_password)
-    user.temp_pass = False
-    user.temp_pass_expires_at = None
     db.session.commit()
     return True, "Password changed. You can sign in now."
 
@@ -167,8 +157,6 @@ def update_password(user, current_password, new_password, confirm_password):
         return False, "New passwords do not match."
 
     user.password = hash_password(new_password)
-    user.temp_pass = False
-    user.temp_pass_expires_at = None
     db.session.commit()
 
     return True, "Password updated successfully."
@@ -200,8 +188,6 @@ def update_profile(user, current_password, email, new_password, confirm_password
         if new_password != confirm_password:
             return False, "New passwords do not match."
         user.password = hash_password(new_password)
-        user.temp_pass = False
-        user.temp_pass_expires_at = None
 
     db.session.commit()
     changed = [what for what, did in (("Email", changing_email), ("password", new_password)) if did]

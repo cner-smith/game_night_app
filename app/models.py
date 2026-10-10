@@ -96,6 +96,8 @@ class Person(db.Model, UserMixin):
     email = db.Column(db.String, unique=True, nullable=True)
     password = db.Column(db.String, nullable=True)
     created_at = db.Column(db.DateTime, server_default=func.now())
+    # Unused: left over from a temporary-password flow that was never wired up.
+    # A later migration can drop both columns.
     temp_pass = db.Column(db.Boolean, default=False)
     temp_pass_expires_at = db.Column(db.DateTime, nullable=True)
     admin = db.Column(db.Boolean, default=False, nullable=False)
