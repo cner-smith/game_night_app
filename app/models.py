@@ -190,6 +190,9 @@ class GameRatings(db.Model):
 
 class Player(db.Model):
     __tablename__ = "players"
+    __table_args__ = (
+        db.UniqueConstraint("game_night_id", "people_id", name="uq_players_night_person"),
+    )
     id = db.Column(db.Integer, primary_key=True)
     game_night_id = db.Column(db.Integer, ForeignKey("gamenights.id"))
     people_id = db.Column(db.Integer, ForeignKey("people.id"))
@@ -225,6 +228,9 @@ class GameNightGame(db.Model):
 
 class Result(db.Model):
     __tablename__ = "results"
+    __table_args__ = (
+        db.UniqueConstraint("game_night_game_id", "player_id", name="uq_results_game_player"),
+    )
     id = db.Column(db.Integer, primary_key=True)
     game_night_game_id = db.Column(db.Integer, ForeignKey("gamenightgames.id"), nullable=True)
     player_id = db.Column(db.Integer, ForeignKey("players.id"), nullable=True)
@@ -238,6 +244,11 @@ class Result(db.Model):
 
 class GameNominations(db.Model):
     __tablename__ = "game_nominations"
+    __table_args__ = (
+        # One nomination per player per night, and each game nominated once.
+        db.UniqueConstraint("game_night_id", "player_id", name="uq_game_nominations_night_player"),
+        db.UniqueConstraint("game_night_id", "game_id", name="uq_game_nominations_night_game"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     game_night_id = db.Column(db.Integer, db.ForeignKey("gamenights.id"), nullable=False)
@@ -251,6 +262,9 @@ class GameNominations(db.Model):
 
 class GameVotes(db.Model):
     __tablename__ = "game_votes"
+    __table_args__ = (
+        db.UniqueConstraint("player_id", "game_id", name="uq_game_votes_player_game"),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     game_night_id = db.Column(db.Integer, db.ForeignKey("gamenights.id"), nullable=False)
@@ -265,6 +279,7 @@ class GameVotes(db.Model):
 
 class Wishlist(db.Model):
     __tablename__ = "wishlist"
+    __table_args__ = (db.UniqueConstraint("person_id", "game_id", name="uq_wishlist_person_game"),)
     id = db.Column(db.Integer, primary_key=True)
     person_id = db.Column(db.Integer, db.ForeignKey("people.id"), nullable=False)
     game_id = db.Column(db.Integer, db.ForeignKey("games.id"), nullable=False)

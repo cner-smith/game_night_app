@@ -3,12 +3,18 @@
 import datetime
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db as _db
 from app.models import (
+    GameNominations,
+    GameVotes,
+    Player,
+    Result,
     TrackerSession,
     TrackerTeam,
     TrackerValue,
+    Wishlist,
     tracker_team_players,
 )
 from app.services import tracker_services
@@ -71,3 +77,57 @@ def test_removing_attendee_on_a_tracker_team_drops_them_from_it(w):
         tracker_team_players.select().where(tracker_team_players.c.team_id == team.id)
     ).all()
     assert [m.player_id for m in members] == [gn._players[a.id].id]
+
+
+def _rejected(*rows):
+    """Adding these rows (after flushing the first) violates a unique constraint."""
+    _db.session.add(rows[0])
+    _db.session.flush()
+    _db.session.add(rows[1])
+    with pytest.raises(IntegrityError):
+        _db.session.flush()
+    _db.session.rollback()
+
+
+def test_a_person_is_on_a_night_once(w):
+    a = w.person()
+    gn = w.night(datetime.date(1840, 1, 1), [])
+    _rejected(
+        Player(game_night_id=gn.id, people_id=a.id), Player(game_night_id=gn.id, people_id=a.id)
+    )
+
+
+def test_a_player_has_one_result_per_game(w):
+    a = w.person()
+    gn = w.night(datetime.date(1840, 1, 1), [a])
+    gng = w.play(gn, w.game(), {})
+    pl = gn._players[a.id].id
+    _rejected(
+        Result(game_night_game_id=gng.id, player_id=pl, position=1),
+        Result(game_night_game_id=gng.id, player_id=pl, position=2),
+    )
+
+
+def test_a_player_ranks_a_game_once(w):
+    a = w.person()
+    gn = w.night(datetime.date(1840, 1, 1), [a])
+    game, pl = w.game(), gn._players[a.id].id
+    _rejected(
+        GameVotes(game_night_id=gn.id, player_id=pl, game_id=game.id, rank=1),
+        GameVotes(game_night_id=gn.id, player_id=pl, game_id=game.id, rank=2),
+    )
+
+
+def test_a_game_is_on_a_wishlist_once(w):
+    a, game = w.person(), w.game()
+    _rejected(Wishlist(person_id=a.id, game_id=game.id), Wishlist(person_id=a.id, game_id=game.id))
+
+
+def test_a_game_is_nominated_once_per_night(w):
+    a, b = w.person(), w.person()
+    gn = w.night(datetime.date(1840, 1, 1), [a, b])
+    game = w.game()
+    _rejected(
+        GameNominations(game_night_id=gn.id, player_id=gn._players[a.id].id, game_id=game.id),
+        GameNominations(game_night_id=gn.id, player_id=gn._players[b.id].id, game_id=game.id),
+    )
