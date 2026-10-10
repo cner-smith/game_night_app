@@ -329,49 +329,6 @@ class GamesIndex(db.Model):  # SQL View
     player_owner = db.Column(db.Boolean, nullable=True)
 
 
-class UserRecentFutureGameNight(db.Model):  # SQL View
-    __tablename__ = "user_recent_future_game_nights"
-    id = db.Column(db.Integer, primary_key=True)  # Artificial primary key from row_number()
-    game_night_id = db.Column(db.Integer, nullable=False)
-    date = db.Column(db.Date, nullable=False)
-    notes = db.Column(db.Text, nullable=True)
-    final = db.Column(db.Boolean, nullable=False)
-    closed = db.Column(db.Boolean, nullable=False)
-    user_id = db.Column(db.Integer, nullable=False)
-
-
-class UserGameNightList(db.Model):  # SQL View
-    __tablename__ = "user_game_nights_list"
-    id = db.Column(db.Integer, primary_key=True)  # Artificial primary key from row_number()
-    game_night_id = db.Column(db.Integer, nullable=False)
-    date = db.Column(db.Date, nullable=False)
-    notes = db.Column(db.Text, nullable=True)
-    final = db.Column(db.Boolean, nullable=False)
-    closed = db.Column(db.Boolean, nullable=False)
-    user_id = db.Column(db.Integer, nullable=False)
-
-
-class AdminRecentFutureGameNight(db.Model):  # SQL View
-    __tablename__ = "admin_recent_future_game_nights"
-    game_night_id = db.Column(
-        db.Integer, primary_key=True
-    )  # Use game_night_id as PK since row_number() isn't used
-    date = db.Column(db.Date, nullable=False)
-    notes = db.Column(db.Text, nullable=True)
-    final = db.Column(db.Boolean, nullable=False)
-    closed = db.Column(db.Boolean, nullable=False)
-
-
-class AdminGameNightList(db.Model):  # SQL View
-    __tablename__ = "admin_game_nights_list"
-    id = db.Column(db.Integer, primary_key=True)  # Artificial primary key from row_number()
-    game_night_id = db.Column(db.Integer, nullable=False)
-    date = db.Column(db.Date, nullable=False)
-    notes = db.Column(db.Text, nullable=True)
-    final = db.Column(db.Boolean, nullable=False)
-    closed = db.Column(db.Boolean, nullable=False)
-
-
 class GameNightRankings(db.Model):  # SQL View
     __tablename__ = "game_night_rankings_view"
 
