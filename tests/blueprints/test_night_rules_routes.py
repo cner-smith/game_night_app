@@ -59,8 +59,15 @@ def test_participant_cannot_discard_or_confirm_tracker(client, w):
     assert client.post(f"/tracker/{session.id}/discard").status_code == 403
     assert _db.session.get(TrackerSession, session.id) is not None
     assert client.get(f"/tracker/{session.id}/end").status_code == 403
-    page = client.get(f"/tracker/{session.id}").get_data(as_text=True)
-    assert "End Game" not in page and "Discard" not in page
+    page = client.get(f"/tracker/{session.id}").get_data(as_text=True).lower()
+    assert "end game" not in page and "discard" not in page
+
+
+def test_participant_finds_the_live_tracker_on_the_night_page(client, w):
+    host, ann, gn, gng, session, ph, pa = _tracked(w)
+    login(client, ann)
+    page = client.get(f"/game_night/{gn.id}").get_data(as_text=True)
+    assert f"/tracker/{session.id}" in page and "Join live tracker" in page
 
 
 def test_participant_can_still_track_scores(client, w):

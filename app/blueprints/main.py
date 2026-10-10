@@ -3,13 +3,19 @@
 import calendar
 from datetime import date
 
-from flask import Blueprint, abort, render_template, request
+from flask import Blueprint, abort, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
 from app.services import index_services
 from app.utils.dates import local_today
 
 main_bp = Blueprint("main", __name__)
+
+
+@main_bp.route("/favicon.ico")
+def favicon():
+    """Browsers ask for /favicon.ico on pages without a <link rel=icon> (error pages)."""
+    return redirect(url_for("static", filename="images/favicon.ico"), code=301)
 
 
 @main_bp.route("/")

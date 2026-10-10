@@ -50,6 +50,7 @@
     </a>
 
     <!-- Nav links -->
+    {% if current_user.is_authenticated %}
     <nav class="flex flex-col items-center gap-1 flex-1 py-4">
       {% set nav_items = [
         ('main.index',    'home', 'Home',    'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6'),
@@ -95,6 +96,7 @@
       </a>
       {% endif %}
     </nav>
+    {% endif %}
 
     <!-- User + sign out at bottom -->
     <!-- Guard with is_authenticated — Phase 3 introduces public routes that use base.html -->
@@ -158,6 +160,7 @@
     </div>
   </main>
 
+  {% if current_user.is_authenticated %}{# logged-out visitors (public recap) get no app links #}
   <!-- ===== MOBILE BOTTOM NAV ===== -->
   <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-stone-200 flex z-30" aria-label="Main">
     {% set mobile_nav = [
@@ -186,6 +189,7 @@
     </a>
     {% endif %}
   </nav>
+  {% endif %}
 
 <script>
   (function () {

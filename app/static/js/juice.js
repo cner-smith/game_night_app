@@ -166,10 +166,15 @@
         btn.querySelector('[data-heart]').textContent = on ? '♥' : '♡';
         if (on && !calm) play(btn, 'gn-heart-pop', 600);
       } else if (kind === 'bought') {
-        // Owning a game doesn't take it off the wishlist (others may still want it), so the
-        // row stays: the button leaves and the row flashes green.
         GN.toast('📦 Added to the library');
         var row = form.closest('[data-wish-item]'), done = document.createElement('span');
+        // On your own list buying takes the game off it, so the row leaves. On the group list
+        // it stays (others may still want it): the button leaves and the row flashes green.
+        if (row && form.hasAttribute('data-leaves-list')) {
+          row.classList.add('gn-leave');
+          setTimeout(function () { row.remove(); }, calm ? 0 : 300);
+          return;
+        }
         done.className = 'text-xs font-medium text-green-700'; done.textContent = '📦 In your library';
         form.classList.add('gn-leave');
         setTimeout(function () { form.replaceWith(done); }, calm ? 0 : 300);

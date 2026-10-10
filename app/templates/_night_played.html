@@ -35,6 +35,15 @@
               {% endif %}
             </p>
 
+            {% if not game_night.final and not can_manage and current_player_id %}
+            {% set tracker_session = tracker_sessions.get(gng.game_night_game_id) %}
+            {% if tracker_session and tracker_session.status == 'active' %}
+            <a href="{{ url_for('tracker.live_tracker', session_id=tracker_session.id) }}"
+               class="mb-3 inline-flex min-h-[2.75rem] items-center rounded-lg border border-blue-300 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 transition-colors">
+              &#9654; Join live tracker
+            </a>
+            {% endif %}
+            {% endif %}
             {% if not game_night.final and can_manage %}
             <div class="flex flex-wrap gap-2 mb-3">
               <form action="{{ url_for('game_night.log_results', game_night_id=game_night.id, game_night_game_id=gng.game_night_game_id) }}" method="GET">
