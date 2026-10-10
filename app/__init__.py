@@ -123,6 +123,10 @@ def create_app(config_class=None):
 
     app.jinja_env.filters["player_range"] = player_range
 
+    from app.utils import new_badges
+
+    new_badges.register(app)
+
     @app.errorhandler(413)
     def upload_too_large(_error):
         from flask import flash, redirect, request, url_for
