@@ -21,6 +21,7 @@ from app.models import (  # noqa: F401
     TrackerValue,
 )
 from app.services import night_policy, tracker_services
+from app.services.errors import ServiceError
 
 tracker_bp = Blueprint("tracker", __name__)
 
@@ -162,7 +163,7 @@ def launch_tracker(gng_id):
             player_ids=player_ids,
             field_order=field_order,
         )
-    except ValueError as e:
+    except ServiceError as e:
         flash(str(e), "error")
         return redirect(url_for("tracker.setup_tracker", gng_id=gng_id))
 
@@ -226,7 +227,7 @@ def add_field(session_id):
             starting_value=starting_value,
             is_score_field=is_score_field,
         )
-    except ValueError as e:
+    except ServiceError as e:
         return str(e), 400
     response = make_response(
         render_template("_tracker_field_row.html", field=field, session=session)
@@ -263,7 +264,7 @@ def update_value(session_id):
             delta=delta,
             value=value,
         )
-    except ValueError as e:
+    except ServiceError as e:
         return str(e), 400
     field = db.session.get(TrackerField, field_id)
     return render_template(
@@ -291,7 +292,7 @@ def end_game(session_id):
     try:
         low_wins = request.args.get("low") == "1"
         rankings = tracker_services.compute_rankings(session_id, low_wins=low_wins)
-    except ValueError:
+    except ServiceError:
         flash("No score field configured. Add a score field before ending the game.", "error")
         return redirect(url_for("tracker.live_tracker", session_id=session_id))
     gng = session.game_night_game
@@ -322,7 +323,7 @@ def save_results(session_id):
                 positions[(kind, entity_id)] = _int_or_none(pos)
     try:
         tracker_services.save_results(session_id, positions)
-    except ValueError as e:
+    except ServiceError as e:
         flash(str(e), "error")
         return redirect(url_for("tracker.end_game", session_id=session_id))
     gn_id = session.game_night_game.game_night_id

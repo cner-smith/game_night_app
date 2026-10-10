@@ -9,6 +9,7 @@ from app.models import (  # noqa: F401 — partial imports used by later functio
     tracker_team_players,
 )
 from app.services import night_policy
+from app.services.errors import ServiceError
 
 GLOBAL_FIELD_TYPES = {"global_counter", "global_notes"}
 PER_PLAYER_FIELD_TYPES = {"counter", "checkbox", "player_notes"}
@@ -62,16 +63,16 @@ def add_field(session_id, *, type, label, starting_value=0, is_score_field=False
     """Add a TrackerField to a configuring session. Does not seed values yet."""
     session = db.session.get(TrackerSession, session_id)
     if session is None or session.status != "configuring":
-        raise ValueError("Fields can only be added to a session in 'configuring' status")
+        raise ServiceError("Fields can only be added to a session in 'configuring' status")
     if type not in VALID_FIELD_TYPES:
-        raise ValueError(
+        raise ServiceError(
             f"Unknown field type: {type!r}. Must be one of: {sorted(VALID_FIELD_TYPES)}"
         )
     label = label.strip() if label else ""
     if not label:
-        raise ValueError("Field label cannot be empty")
+        raise ServiceError("Field label cannot be empty")
     if is_score_field and type != "counter":
-        raise ValueError("Only a per-player counter can be the score field")
+        raise ServiceError("Only a per-player counter can be the score field")
     replaced = False
     if is_score_field:
         # One score field per session: the new one replaces the starting
@@ -111,7 +112,7 @@ def launch_session(session_id, *, mode, teams_data, player_ids, field_order=None
     """
     session = db.get_or_404(TrackerSession, session_id)
     if session.status != "configuring":
-        raise ValueError("Only sessions in 'configuring' status can be launched")
+        raise ServiceError("Only sessions in 'configuring' status can be launched")
     night_policy.require_editable(session.game_night_game.game_night)
 
     # Require at least one score field before launch
@@ -119,7 +120,7 @@ def launch_session(session_id, *, mode, teams_data, player_ids, field_order=None
         tracker_session_id=session_id, is_score_field=True
     ).first()
     if score_field is None:
-        raise ValueError("At least one field must be marked as the score field before launching")
+        raise ServiceError("At least one field must be marked as the score field before launching")
 
     # Apply drag-to-reorder sort_order if provided
     if field_order:
@@ -179,13 +180,13 @@ def update_value(session_id, field_id, *, entity_type, entity_id=None, delta=Non
     """
     session = db.session.get(TrackerSession, session_id)
     if session is None or session.status != "active":
-        raise ValueError("Values can only be updated for sessions in 'active' status")
+        raise ServiceError("Values can only be updated for sessions in 'active' status")
     night_policy.require_editable(session.game_night_game.game_night)
 
     # Validate field belongs to this session
     field = TrackerField.query.filter_by(id=field_id, tracker_session_id=session_id).first()
     if field is None:
-        raise ValueError(f"TrackerField {field_id} not found in session {session_id}")
+        raise ServiceError(f"TrackerField {field_id} not found in session {session_id}")
 
     player_id = entity_id if entity_type == "player" else None
     team_id = entity_id if entity_type == "team" else None
@@ -201,7 +202,7 @@ def update_value(session_id, field_id, *, entity_type, entity_id=None, delta=Non
         .first()
     )
     if tv is None:
-        raise ValueError(
+        raise ServiceError(
             f"TrackerValue not found for field {field_id}, entity_type={entity_type}, entity_id={entity_id}"
         )
 
@@ -216,17 +217,17 @@ def update_value(session_id, field_id, *, entity_type, entity_id=None, delta=Non
             try:
                 int(value)
             except ValueError:
-                raise ValueError(
+                raise ServiceError(
                     f"Counter field '{field.label}' requires an integer value, got: {value!r}"
                 )
         elif field.type == "checkbox":
             if value not in ("true", "false"):
-                raise ValueError(
+                raise ServiceError(
                     f"Checkbox field '{field.label}' requires 'true' or 'false', got: {value!r}"
                 )
         elif field.type in ("player_notes", "global_notes"):
             if len(value) > _NOTES_MAX_LEN:
-                raise ValueError(
+                raise ServiceError(
                     f"Note value exceeds maximum length of {_NOTES_MAX_LEN} characters"
                 )
         tv.value = value
@@ -246,7 +247,7 @@ def compute_rankings(session_id, low_wins=False):
         tracker_session_id=session_id, is_score_field=True
     ).first()
     if score_field is None:
-        raise ValueError(f"No score field found for session {session_id}")
+        raise ServiceError(f"No score field found for session {session_id}")
 
     values = TrackerValue.query.filter_by(tracker_field_id=score_field.id).all()
     sorted_vals = sorted(values, key=lambda v: int(v.value), reverse=not low_wins)
@@ -281,9 +282,9 @@ def save_results(session_id, positions=None):
     """
     session = db.session.get(TrackerSession, session_id)
     if session is None:
-        raise ValueError(f"TrackerSession {session_id} not found")
+        raise ServiceError(f"TrackerSession {session_id} not found")
     if session.status != "active":
-        raise ValueError("Results can only be saved for sessions in 'active' status")
+        raise ServiceError("Results can only be saved for sessions in 'active' status")
     night_policy.require_editable(session.game_night_game.game_night)
 
     gng_id = session.game_night_game_id
@@ -294,9 +295,9 @@ def save_results(session_id, positions=None):
     }
     for key, place in (positions or {}).items():
         if key not in by_key:
-            raise ValueError(f"{key[0].capitalize()} {key[1]} is not in this session")
+            raise ServiceError(f"{key[0].capitalize()} {key[1]} is not in this session")
         if not isinstance(place, int) or not 1 <= place <= len(rankings):
-            raise ValueError(f"Places go from 1 to {len(rankings)}.")
+            raise ServiceError(f"Places go from 1 to {len(rankings)}.")
         by_key[key]["position"] = place
 
     for entry in rankings:
