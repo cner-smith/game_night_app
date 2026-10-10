@@ -22,6 +22,68 @@ _NOTES_MAX_LEN = 500
 DEFAULT_SCORE_LABEL = "Score"
 
 
+def can_track(game_night, user):
+    """The night's players and whoever manages it can set up and score trackers."""
+    return game_night.managed_by(user) or (
+        Player.query.filter_by(game_night_id=game_night.id, people_id=user.id).first() is not None
+    )
+
+
+def find_session(game_night_game_id, status=None, *, session_id=None):
+    """The game's tracker session with this status (or this id), or None."""
+    query = TrackerSession.query.filter_by(game_night_game_id=game_night_game_id)
+    if status is not None:
+        query = query.filter_by(status=status)
+    if session_id is not None:
+        query = query.filter_by(id=session_id)
+    return query.first()
+
+
+def setup_context(session, game_night):
+    """Players (by first name), who's playing (everyone but RSVP "Can't Make
+    It") and the session's fields in order, for the setup page."""
+    from app.services.poll_services import rsvps_for_night
+
+    players = sorted(
+        Player.query.filter_by(game_night_id=game_night.id).all(),
+        key=lambda p: p.person.first_name.lower(),
+    )
+    rsvps = rsvps_for_night(game_night)
+    fields = (
+        TrackerField.query.filter_by(tracker_session_id=session.id)
+        .order_by(TrackerField.sort_order)
+        .all()
+    )
+    return {
+        "players": players,
+        "playing": {p.id for p in players if rsvps.get(p.people_id) != "Can't Make It"},
+        "fields": fields,
+    }
+
+
+def live_context(session):
+    """Everything the live tracker page shows, with the values in one query."""
+    all_values = TrackerValue.query.filter_by(tracker_session_id=session.id).all()
+    # Only the players this game was started with (not everyone at the night).
+    seeded = {v.player_id for v in all_values if v.player_id is not None}
+    players = (
+        sorted(
+            Player.query.filter(Player.id.in_(seeded)).all(),
+            key=lambda p: p.person.first_name.lower(),
+        )
+        if session.mode == "individual"
+        else []
+    )
+    return {
+        # {(field_id, player_id, team_id): TrackerValue}
+        "value_map": {(v.tracker_field_id, v.player_id, v.team_id): v for v in all_values},
+        "players": players,
+        "teams": session.teams if session.mode == "teams" else [],
+        "global_fields": [f for f in session.fields if f.type in GLOBAL_FIELD_TYPES],
+        "player_fields": [f for f in session.fields if f.type not in GLOBAL_FIELD_TYPES],
+    }
+
+
 def open_sessions_by_game(game_night_game_ids):
     """{game_night_game_id: session} for trackers being set up or played."""
     if not game_night_game_ids:

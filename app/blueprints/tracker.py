@@ -13,13 +13,7 @@ from flask import (
 from flask_login import current_user, login_required
 
 from app.extensions import db
-from app.models import (  # noqa: F401
-    GameNightGame,
-    Player,
-    TrackerField,
-    TrackerSession,
-    TrackerValue,
-)
+from app.models import GameNightGame, TrackerSession
 from app.services import night_policy, tracker_services
 from app.services.errors import ServiceError
 
@@ -35,14 +29,7 @@ def _get_session_or_404(session_id):
 
 def _assert_participant_or_admin(session):
     """Abort 403 if current user is not a participant of the session's game night or admin."""
-    gng = session.game_night_game
-    if gng.game_night.managed_by(current_user):
-        return
-    is_participant = Player.query.filter_by(
-        game_night_id=gng.game_night_id, people_id=current_user.id
-    ).first()
-    if not is_participant:
-        abort(403)
+    _assert_gng_participant_or_admin(session.game_night_game)
 
 
 def _assert_manager(session):
@@ -60,12 +47,7 @@ def _int_or_none(raw):
 
 def _assert_gng_participant_or_admin(gng):
     """Abort 403 if current user is not a participant of this game night or admin."""
-    if gng.game_night.managed_by(current_user):
-        return
-    is_participant = Player.query.filter_by(
-        game_night_id=gng.game_night_id, people_id=current_user.id
-    ).first()
-    if not is_participant:
+    if not tracker_services.can_track(gng.game_night, current_user):
         abort(403)
 
 
@@ -78,36 +60,20 @@ def setup_tracker(gng_id):
     if gn.final:
         abort(400, "Cannot start a tracker for a finalized game night.")
     # Redirect away from completed sessions — can't re-track a finished game
-    completed = TrackerSession.query.filter_by(
-        game_night_game_id=gng_id, status="completed"
-    ).first()
-    if completed:
+    if tracker_services.find_session(gng_id, "completed"):
         return redirect(url_for("game_night.view_game_night", game_night_id=gn.id))
     # Resume active session if one exists
-    active = TrackerSession.query.filter_by(game_night_game_id=gng_id, status="active").first()
+    active = tracker_services.find_session(gng_id, "active")
     if active:
         return redirect(url_for("tracker.live_tracker", session_id=active.id))
     session = tracker_services.get_or_create_configuring_session(gng_id)
-    players = Player.query.filter_by(game_night_id=gn.id).all()
-    fields = (
-        TrackerField.query.filter_by(tracker_session_id=session.id)
-        .order_by(TrackerField.sort_order)
-        .all()
-    )
-    from app.services.poll_services import rsvps_for_night
-
-    rsvps = rsvps_for_night(gn)
-    players = sorted(players, key=lambda p: p.person.first_name.lower())
-    playing = {p.id for p in players if rsvps.get(p.people_id) != "Can't Make It"}
     return render_template(
         "tracker_setup.html",
         session=session,
         gng=gng,
         gn=gn,
-        players=players,
-        playing=playing,
-        fields=fields,
         can_manage=night_policy.can_manage(gn, current_user),
+        **tracker_services.setup_context(session, gn),
     )
 
 
@@ -121,8 +87,7 @@ def launch_tracker(gng_id):
     if session_id is None:
         abort(400, "Invalid session for this game.")
     # Verify session belongs to this gng — prevents IDOR
-    session = TrackerSession.query.filter_by(id=session_id, game_night_game_id=gng_id).first()
-    if session is None:
+    if tracker_services.find_session(gng_id, session_id=session_id) is None:
         abort(400, "Invalid session for this game.")
 
     mode = request.form.get("mode", "individual")
@@ -178,33 +143,12 @@ def live_tracker(session_id):
     gn = session.game_night_game.game_night
     if gn.final:
         return redirect(url_for("game_night.view_game_night", game_night_id=gn.id))
-    # Batch-load all values for this session in one query
-    all_values = TrackerValue.query.filter_by(tracker_session_id=session_id).all()
-    # Build value lookup: {(field_id, player_id, team_id): TrackerValue}
-    value_map = {(v.tracker_field_id, v.player_id, v.team_id): v for v in all_values}
-    # Only the players this game was started with (not everyone at the night).
-    seeded = {v.player_id for v in all_values if v.player_id is not None}
-    players = (
-        sorted(
-            Player.query.filter(Player.id.in_(seeded)).all(),
-            key=lambda p: p.person.first_name.lower(),
-        )
-        if session.mode == "individual"
-        else []
-    )
-    teams = session.teams if session.mode == "teams" else []
-    global_fields = [f for f in session.fields if f.type in ("global_counter", "global_notes")]
-    player_fields = [f for f in session.fields if f.type not in ("global_counter", "global_notes")]
     return render_template(
         "tracker_live.html",
         session=session,
         gn=gn,
-        players=players,
-        teams=teams,
-        global_fields=global_fields,
-        player_fields=player_fields,
-        value_map=value_map,
         can_manage=night_policy.can_manage(gn, current_user),
+        **tracker_services.live_context(session),
     )
 
 
@@ -266,11 +210,10 @@ def update_value(session_id):
         )
     except ServiceError as e:
         return str(e), 400
-    field = db.session.get(TrackerField, field_id)
     return render_template(
         "_tracker_cell.html",
         tv=tv,
-        field=field,
+        field=tv.field,
         session=session,
         entity_type=entity_type,
         entity_id=entity_id,
