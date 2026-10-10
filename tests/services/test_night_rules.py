@@ -157,6 +157,29 @@ def test_nominate_and_vote_refused_when_voting_closed(w):
     assert GameVotes.query.filter_by(game_night_id=gn.id).count() == 0
 
 
+# --- deleting a night takes its RSVP poll with it -----------------------------
+
+
+def test_deleting_a_night_deletes_its_rsvp_poll_and_closes_linked_polls(w):
+    from app.models import Poll
+    from app.services import poll_services
+
+    host = w.person("Host")
+    gn = w.night(host, host=host)
+    poll_services.create_availability_poll(gn.id, host.id)
+    rsvp_id = gn.availability_poll.id
+    other = poll_services.create_poll(
+        "Snacks?", None, ["Chips", "Fruit"], host.id, False, game_night_id=gn.id
+    )
+    w.polls.append(other.id)
+
+    ok, _ = gns.delete_game_night(gn.id)
+    assert ok
+    assert _db.session.get(Poll, rsvp_id) is None
+    other = _db.session.get(Poll, other.id)
+    assert other.closed
+
+
 # --- removing a player who is in a tracker ------------------------------------
 
 

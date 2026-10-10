@@ -175,6 +175,13 @@ def delete_game_night(game_night_id):
     from app.services import media_services, photo_services
 
     files = photo_services.files_for_night(game_night) + food_services.files_for_night(game_night)
+    # Unlinked polls are visible site-wide, so the night's RSVP poll goes with
+    # it and any other poll linked to it is closed (it keeps its answers).
+    for poll in list(game_night.polls):
+        if poll.availability:
+            db.session.delete(poll)
+        else:
+            poll.closed = True
     db.session.delete(game_night)
     db.session.commit()
     media_services.delete(*files)
