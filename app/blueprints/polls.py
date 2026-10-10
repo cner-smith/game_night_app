@@ -1,6 +1,7 @@
 from flask import (
     Blueprint,
     abort,
+    current_app,
     flash,
     has_request_context,
     redirect,
@@ -10,6 +11,7 @@ from flask import (
 )
 from flask_login import current_user, login_required
 
+from app.extensions import db
 from app.services import date_poll_services
 from app.services.poll_services import (
     can_manage,
@@ -30,14 +32,24 @@ polls_bp = Blueprint("polls", __name__)
 @polls_bp.app_context_processor
 def inject_active_polls():
     """The number of open polls the current user can see (for the nav badge)."""
-    from app.services.poll_services import open_polls_for
+    from app.services import poll_services
 
-    # Emails rendered by the scheduler have no request (and so no user).
-    if not has_request_context() or not current_user.is_authenticated:
+    # Emails rendered by the scheduler have no request (and so no user), and
+    # HTMX fragments (a tracker tap, a poll answer) have no nav to show it in,
+    # and the nav only shows it to people who can run polls.
+    if (
+        not has_request_context()
+        or (request.headers.get("HX-Request") and not request.headers.get("HX-Boosted"))
+        or not current_user.is_authenticated
+        or not current_user.can_start_nights
+    ):
         return {"active_polls_count": 0}
     try:
-        return {"active_polls_count": len(open_polls_for(current_user))}
+        return {"active_polls_count": poll_services.count_open_polls_for(current_user)}
     except Exception:
+        # A nav badge isn't worth a broken page, but it is worth a log line.
+        current_app.logger.exception("Couldn't count open polls for the nav")
+        db.session.rollback()
         return {"active_polls_count": 0}
 
 
@@ -74,6 +86,14 @@ def _local_dt(value):
 def _form_night_id() -> int | None:
     raw = request.form.get("game_night_id", "")
     return int(raw) if raw.isdigit() else None
+
+
+NIGHT_NOT_LINKABLE = "Pick one of the game nights in the list (or none)."
+
+
+def _night_ok(night_id: int | None, nights) -> bool:
+    """A poll can only be linked to a night in the form's list: one you run."""
+    return night_id is None or any(n.id == night_id for n in nights)
 
 
 # ── Admin routes ─────────────────────────────────────────────────────────── #
@@ -152,6 +172,8 @@ def poll_create():
             ]
             if len(option_labels) < 2:
                 return page("A poll needs at least two options.")
+            if not _night_ok(_form_night_id(), nights):
+                return page(NIGHT_NOT_LINKABLE), 400
             create_poll(
                 title,
                 description,
@@ -214,6 +236,14 @@ def poll_edit(poll_id: int):
                 nights=nights,
                 error="Title is required.",
             )
+        if not _night_ok(_form_night_id(), nights):
+            return render_template(
+                "poll_edit.html",
+                poll=poll,
+                people=people,
+                nights=nights,
+                error=NIGHT_NOT_LINKABLE,
+            ), 400
 
         update_poll(
             poll,
@@ -248,8 +278,6 @@ def poll_pick_date(poll_id: int, option_id: int):
 @polls_bp.route("/polls/<int:poll_id>/close", methods=["POST"])
 @login_required
 def poll_close(poll_id: int):
-    from app.extensions import db
-
     poll = _managed_poll(poll_id)
     poll.closed = True
     db.session.commit()
@@ -259,8 +287,6 @@ def poll_close(poll_id: int):
 @polls_bp.route("/polls/<int:poll_id>/delete", methods=["POST"])
 @login_required
 def poll_delete(poll_id: int):
-    from app.extensions import db
-
     poll = _managed_poll(poll_id)
     db.session.delete(poll)
     db.session.commit()
