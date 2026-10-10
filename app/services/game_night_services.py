@@ -3,6 +3,7 @@ from collections import defaultdict
 from datetime import datetime
 
 from flask import abort
+from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import func
 
@@ -20,8 +21,10 @@ from app.models import (
     PersonBadge,
     Player,
     Result,
+    TrackerValue,
     Wishlist,
     db,
+    tracker_team_players,
 )
 from app.services import food_services, night_policy, poll_services
 from app.services.admin_services import get_all_people
@@ -48,6 +51,10 @@ def manage_attendees(game_night, attendees_ids):
     if with_results:
         names = ", ".join(p.person.first_name for p in with_results)
         return f"{names} already {'has' if len(with_results) == 1 else 'have'} results logged for this night; remove those results before removing them."
+    tracked = [p for p in removing if _in_a_tracker(p.id)]
+    if tracked:
+        names = ", ".join(p.person.first_name for p in tracked)
+        return f"{names} {'is' if len(tracked) == 1 else 'are'} in a game tracker for this night; finish or discard that tracker before removing them."
 
     for player in removing:
         # Their nomination goes with them, so nobody's votes for it count any more.
@@ -61,6 +68,19 @@ def manage_attendees(game_night, attendees_ids):
     for person_id in new_attendees - current_attendees:
         db.session.add(Player(game_night_id=game_night.id, people_id=person_id))
     return None
+
+
+def _in_a_tracker(player_id):
+    """Whether a tracker (any status) holds values or a team seat for this player."""
+    return (
+        TrackerValue.query.filter_by(player_id=player_id).first() is not None
+        or db.session.execute(
+            select(tracker_team_players.c.player_id)
+            .where(tracker_team_players.c.player_id == player_id)
+            .limit(1)
+        ).first()
+        is not None
+    )
 
 
 def start_game_night(

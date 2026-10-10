@@ -155,3 +155,36 @@ def test_nominate_and_vote_refused_when_voting_closed(w):
     assert not ok and "closed" in msg
     assert GameNominations.query.filter_by(game_night_id=gn.id).count() == 0
     assert GameVotes.query.filter_by(game_night_id=gn.id).count() == 0
+
+
+# --- removing a player who is in a tracker ------------------------------------
+
+
+def test_removing_a_tracked_player_is_blocked_with_a_message(w):
+    a, b = w.person("Ann"), w.person("Bo")
+    gn = w.night(a, b)
+    _active_tracker(w, gn, [a, b])
+    ok, msg = gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id)])
+    assert not ok and "Bo" in msg and "tracker" in msg
+    assert Player.query.filter_by(game_night_id=gn.id).count() == 2
+
+
+def test_removing_a_player_on_a_tracked_team_is_blocked(w):
+    a, b, c = w.person("Ann"), w.person("Bo"), w.person("Cy")
+    gn = w.night(a, b, c)
+    gng = w.play(gn)
+    session = tracker_services.get_or_create_configuring_session(gng.id)
+    tracker_services.launch_session(
+        session.id,
+        mode="teams",
+        teams_data=[
+            {"name": "Red", "player_ids": [w.player(gn, a).id]},
+            {"name": "Blue", "player_ids": [w.player(gn, b).id]},
+        ],
+        player_ids=[],
+    )
+    ok, msg = gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id), str(c.id)])
+    assert not ok and "Bo" in msg
+    # Cy isn't tracked, so removing only Cy is fine.
+    ok, _ = gns.edit_game_night(gn.id, "2030-01-01", "", [str(a.id), str(b.id)])
+    assert ok
