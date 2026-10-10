@@ -158,17 +158,7 @@ def test_setup_get_completed_session_redirects(app, db, auth_tracker_client):
         entity_id=auth_tracker_client["player_id"],
         delta=3,
     )
-    save_results(
-        session.id,
-        [
-            {
-                "player_id": auth_tracker_client["player_id"],
-                "team_id": None,
-                "position": 1,
-                "score": 3,
-            }
-        ],
-    )
+    save_results(session.id)
     resp = c.get(f"/game_night/{gng_id}/tracker/new")
     assert resp.status_code == 302
     assert f"/game_night/{auth_tracker_client['gn_id']}" in resp.headers["Location"]
@@ -498,17 +488,7 @@ def test_end_game_completed_session_redirects(app, db, auth_tracker_client):
         entity_id=auth_tracker_client["player_id"],
         delta=3,
     )
-    save_results(
-        session.id,
-        [
-            {
-                "player_id": auth_tracker_client["player_id"],
-                "team_id": None,
-                "position": 1,
-                "score": 3,
-            }
-        ],
-    )
+    save_results(session.id)
     resp = c.get(f"/tracker/{session.id}/end")
     assert resp.status_code == 302
 

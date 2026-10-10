@@ -269,9 +269,13 @@ def compute_rankings(session_id, low_wins=False):
     return rankings
 
 
-def save_results(session_id, rankings):
+def save_results(session_id, positions=None):
     """
-    Write Result rows using fetch-or-create upsert. Mirrors log_results pattern.
+    Write the session's results (fetch-or-create upsert, like log_results).
+
+    Scores come from the tracked values, never from the caller. Places start
+    from compute_rankings; positions ({("player"|"team", id): place}) lets
+    the host change any place on the confirm page, each 1..number of entries.
     In team mode, all team members get the team's position and score.
     Marks session status = "completed".
     """
@@ -283,24 +287,23 @@ def save_results(session_id, rankings):
     night_policy.require_editable(session.game_night_game.game_night)
 
     gng_id = session.game_night_game_id
-
-    # Build valid participant sets from seeded TrackerValues
-    seeded = TrackerValue.query.filter_by(tracker_session_id=session_id).all()
-    valid_player_ids = {tv.player_id for tv in seeded if tv.player_id is not None}
-    valid_team_ids = {tv.team_id for tv in seeded if tv.team_id is not None}
+    rankings = compute_rankings(session_id)
+    by_key = {
+        ("player", r["player_id"]) if r["player_id"] is not None else ("team", r["team_id"]): r
+        for r in rankings
+    }
+    for key, place in (positions or {}).items():
+        if key not in by_key:
+            raise ValueError(f"{key[0].capitalize()} {key[1]} is not in this session")
+        if not isinstance(place, int) or not 1 <= place <= len(rankings):
+            raise ValueError(f"Places go from 1 to {len(rankings)}.")
+        by_key[key]["position"] = place
 
     for entry in rankings:
-        if entry.get("player_id") is not None:
-            if entry["player_id"] not in valid_player_ids:
-                raise ValueError(
-                    f"Player {entry['player_id']} is not a participant in this session"
-                )
+        if entry["player_id"] is not None:
             _upsert_result(gng_id, entry["player_id"], entry["position"], entry["score"])
-        elif entry.get("team_id") is not None:
-            if entry["team_id"] not in valid_team_ids:
-                raise ValueError(f"Team {entry['team_id']} is not in this session")
-            team = TrackerTeam.query.get(entry["team_id"])
-            for player in team.players:
+        else:
+            for player in entry["team"].players:
                 _upsert_result(gng_id, player.id, entry["position"], entry["score"])
 
     session.status = "completed"

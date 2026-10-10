@@ -19,7 +19,7 @@ from app.models import (  # noqa: F401
     TrackerSession,
     TrackerValue,
 )
-from app.services import tracker_services
+from app.services import night_policy, tracker_services
 
 tracker_bp = Blueprint("tracker", __name__)
 
@@ -41,6 +41,19 @@ def _assert_participant_or_admin(session):
     ).first()
     if not is_participant:
         abort(403)
+
+
+def _assert_manager(session):
+    """Abort 403 unless current user hosts this session's night (or is an admin)."""
+    if not night_policy.can_manage(session.game_night_game.game_night, current_user):
+        abort(403)
+
+
+def _int_or_none(raw):
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return None
 
 
 def _assert_gng_participant_or_admin(gng):
@@ -92,6 +105,7 @@ def setup_tracker(gng_id):
         players=players,
         playing=playing,
         fields=fields,
+        can_manage=night_policy.can_manage(gn, current_user),
     )
 
 
@@ -179,6 +193,7 @@ def live_tracker(session_id):
         global_fields=global_fields,
         player_fields=player_fields,
         value_map=value_map,
+        can_manage=night_policy.can_manage(gn, current_user),
     )
 
 
@@ -247,7 +262,7 @@ def update_value(session_id):
 @login_required
 def end_game(session_id):
     session = _get_session_or_404(session_id)
-    _assert_participant_or_admin(session)
+    _assert_manager(session)
     if session.status == "completed":
         return redirect(
             url_for(
@@ -275,24 +290,20 @@ def end_game(session_id):
 @tracker_bp.route("/tracker/<int:session_id>/save", methods=["POST"])
 @login_required
 def save_results(session_id):
+    """Results are official, so only the night's host or an admin saves them.
+    Scores are taken from the tracker; the form can only change places."""
     session = _get_session_or_404(session_id)
-    _assert_participant_or_admin(session)
-    rankings = []
+    _assert_manager(session)
+    positions = {}
     for key, pos in request.form.items():
-        if key.startswith("position_p_"):
-            player_id = int(key[len("position_p_") :])
-            score = int(request.form.get(f"score_p_{player_id}", 0))
-            rankings.append(
-                {"player_id": player_id, "team_id": None, "position": int(pos), "score": score}
-            )
-        elif key.startswith("position_t_"):
-            team_id = int(key[len("position_t_") :])
-            score = int(request.form.get(f"score_t_{team_id}", 0))
-            rankings.append(
-                {"player_id": None, "team_id": team_id, "position": int(pos), "score": score}
-            )
+        for prefix, kind in (("position_p_", "player"), ("position_t_", "team")):
+            if key.startswith(prefix):
+                entity_id = _int_or_none(key[len(prefix) :])
+                if entity_id is None:
+                    abort(400)
+                positions[(kind, entity_id)] = _int_or_none(pos)
     try:
-        tracker_services.save_results(session_id, rankings)
+        tracker_services.save_results(session_id, positions)
     except ValueError as e:
         flash(str(e), "error")
         return redirect(url_for("tracker.end_game", session_id=session_id))
@@ -304,7 +315,7 @@ def save_results(session_id):
 @login_required
 def discard_tracker(session_id):
     session = _get_session_or_404(session_id)
-    _assert_participant_or_admin(session)
+    _assert_manager(session)
     gn_id = session.game_night_game.game_night_id
     tracker_services.discard_session(session_id)
     return redirect(url_for("game_night.view_game_night", game_night_id=gn_id))

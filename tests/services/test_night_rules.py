@@ -111,7 +111,7 @@ def test_tracker_writes_refused_on_final_night(w):
         )
     _db.session.rollback()
     with pytest.raises(night_policy.NightRuleError):
-        tracker_services.save_results(session.id, [])
+        tracker_services.save_results(session.id)
     _db.session.rollback()
     assert Result.query.filter_by(game_night_game_id=session.game_night_game_id).count() == 0
 
