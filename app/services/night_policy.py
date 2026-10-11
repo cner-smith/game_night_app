@@ -6,13 +6,16 @@ locked: nothing about its games, results, players or votes changes until a
 host or admin reopens it.
 """
 
+from app.services.errors import ServiceError
+
 FINAL_MESSAGE = "This game night is finalized. Reopen it to make changes."
 VOTING_CLOSED_MESSAGE = "Voting is closed for this game night."
 MANAGER_MESSAGE = "Only this night's host or an admin can do that."
 
 
-class NightRuleError(ValueError):
-    """A night rule refused the change; the message is safe to show."""
+class NightRuleError(ServiceError, ValueError):
+    """A night rule refused the change; the message is safe to show. Still a
+    ValueError so callers that catch ValueError (the tracker) keep working."""
 
 
 def can_manage(night, user) -> bool:

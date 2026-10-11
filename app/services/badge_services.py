@@ -690,7 +690,8 @@ def _check_the_oracle(person_id: int, game_night_id: int) -> bool:
 
 
 def _check_founding_member(person_id: int, game_night_id: int) -> bool:
-    """Among the first 5 people to play, by the date of their first night.
+    """Among the first 5 people to play, by the date of the first night they
+    played a game (attending without playing doesn't count).
 
     Everyone debuting on the same night ties, so a big first night can make
     more than five founders; row order (the old tie-break) was arbitrary.
@@ -698,6 +699,7 @@ def _check_founding_member(person_id: int, game_night_id: int) -> bool:
     debut = (
         db.session.query(Player.people_id, func.min(GameNight.date).label("first"))
         .join(GameNight, GameNight.id == Player.game_night_id)
+        .join(Result, Result.player_id == Player.id)
         .filter(GameNight.final.is_(True))
         .group_by(Player.people_id)
         .subquery()

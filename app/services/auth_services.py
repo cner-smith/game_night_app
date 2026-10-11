@@ -2,6 +2,7 @@ import hashlib
 from datetime import timedelta
 
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from app.extensions import bcrypt
 from app.models import AuthThrottle, Person, db
@@ -67,7 +68,10 @@ def login(email, password, ip=None):
     if not email or not password:
         return False, "Enter your email and password.", None
     throttle = _throttle_on()
-    email_key, ip_key = _email_key("login", email), f"login:ip:{ip}" if ip else None
+    # The per-email limit counts per address too, so someone guessing at an
+    # account from one place can't lock its owner out everywhere else.
+    email_key = _email_key("login", f"{email}|{ip or ''}")
+    ip_key = f"login:ip:{ip}" if ip else None
     if throttle and (
         _over_limit(email_key, LOGIN_EMAIL_LIMIT, LOGIN_WINDOW)
         or (ip_key and _over_limit(ip_key, LOGIN_IP_LIMIT, LOGIN_WINDOW))
@@ -75,6 +79,14 @@ def login(email, password, ip=None):
         return False, TOO_MANY_LOGINS, None
     user = Person.query.filter(func.lower(Person.email) == email).first()
     if user and user.password and bcrypt.check_password_hash(user.password, password):
+        if user.temp_pass:
+            # The old temporary-password flow (removed) mailed these out with an
+            # expiry; don't let one sign in now that nothing checks the expiry.
+            return (
+                False,
+                "That was a temporary password. Use Forgot password? to set a new one.",
+                None,
+            )
         return True, "Login successful.", user
     if throttle:
         _record(email_key, ip_key)
@@ -98,14 +110,19 @@ def _invite_fingerprint(person):
     return hashlib.sha256((person.session_token or "").encode("utf-8")).hexdigest()[:16]
 
 
-def make_invite_token(person):
-    return _invite_serializer().dumps({"id": person.id, "st": _invite_fingerprint(person)})
+def make_invite_token(person, inviter):
+    # The link names who made it, so it stops working if they could no longer
+    # make it (they lost hosting, or an admin has since given the person rights).
+    return _invite_serializer().dumps(
+        {"id": person.id, "st": _invite_fingerprint(person), "by": inviter.id}
+    )
 
 
 def invite_link(person):
     from flask import url_for
+    from flask_login import current_user
 
-    return url_for("auth.signup", invite=make_invite_token(person), _external=True)
+    return url_for("auth.signup", invite=make_invite_token(person, current_user), _external=True)
 
 
 def person_for_invite(token):
@@ -124,13 +141,18 @@ def person_for_invite(token):
         return None
     if _invite_fingerprint(person) != data.get("st"):
         return None
+    inviter = db.session.get(Person, data["by"]) if isinstance(data.get("by"), int) else None
+    if inviter is None or not inviter.active or not can_invite(inviter, person):
+        return None
     return person
 
 
 def can_invite(user, person):
-    """Admins can invite anyone who hasn't signed up. Hosts can invite
-    unclaimed people who play on a night they host, unless an admin has given
-    that person rights (only an admin's link should hand those over)."""
+    """Admins can invite anyone who hasn't signed up. Hosts can invite their
+    own guests: unclaimed people who have only played on nights this host ran
+    (so a host can't take over a regular's history by adding them to a night),
+    and only if an admin hasn't given them rights (only an admin's link should
+    hand those over)."""
     from app.models import GameNight, Player
 
     if person is None or not person.active or person.email or person.password or person.owner:
@@ -139,13 +161,14 @@ def can_invite(user, person):
         return True
     if not user.can_host or person.admin or person.can_host:
         return False
-    return (
-        db.session.query(Player.id)
-        .join(GameNight, GameNight.id == Player.game_night_id)
-        .filter(Player.people_id == person.id, GameNight.host_id == user.id)
-        .first()
-        is not None
-    )
+    hosted = {
+        bool(mine)
+        for (mine,) in db.session.query(GameNight.host_id == user.id)
+        .join(Player, Player.game_night_id == GameNight.id)
+        .filter(Player.people_id == person.id)
+        .distinct()
+    }
+    return hosted == {True}
 
 
 def invitable_people(user):
@@ -186,9 +209,21 @@ def signup(email, password, invite=None):
             "An account with this email already exists. Sign in, or reset your password.",
         )
 
+    # Two sign-ups racing on one link: lock the person and re-check it's unclaimed.
+    person = Person.query.filter_by(id=person.id).with_for_update().populate_existing().one()
+    if person.email or person.password:
+        db.session.rollback()
+        return False, INVITE_USED
     person.email = email
     person.password = hash_password(password)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:  # the same email signed up a moment ago
+        db.session.rollback()
+        return (
+            False,
+            "An account with this email already exists. Sign in, or reset your password.",
+        )
 
     return True, "You're signed up! You can now log in."
 

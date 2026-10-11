@@ -14,6 +14,7 @@ from app.models import (
     TrackerSession,
     TrackerValue,
 )
+from app.services.errors import ServiceError
 
 
 @pytest.fixture()
@@ -132,7 +133,7 @@ def test_update_value_rejects_invalid_counter_value(app, db, active_session):
 
     sid = active_session["session_id"]
     field = TrackerField.query.filter_by(tracker_session_id=sid, label="VP").first()
-    with pytest.raises(ValueError):
+    with pytest.raises(ServiceError):
         update_value(
             sid, field.id, entity_type="player", entity_id=active_session["pl1_id"], value="banana"
         )
@@ -312,7 +313,7 @@ def test_new_session_starts_with_score_and_can_be_replaced(app, db):
     fields = TrackerField.query.filter_by(tracker_session_id=session.id).all()
     assert [(f.label, f.is_score_field) for f in fields] == [("Score", True)]
 
-    with _pytest.raises(ValueError):
+    with _pytest.raises(ServiceError):
         ts.add_field(session.id, type="checkbox", label="Won?", is_score_field=True)
     vp = ts.add_field(session.id, type="counter", label="VP", is_score_field=True)
     assert vp.replaced_score_field

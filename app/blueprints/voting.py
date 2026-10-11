@@ -1,21 +1,33 @@
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
 
-from app.extensions import db
-from app.services import voting_services
+from app.services import night_policy, voting_services
+from app.services.errors import ServiceError
 from app.utils import flash_if_no_action, game_night_access_required
+from app.utils.errors import service_error_response
 
 voting_bp = Blueprint("voting", __name__)
+
+
+@voting_bp.errorhandler(ServiceError)
+def _refused(error):
+    """Nominating and ranking happen on the night page; go back there."""
+    return service_error_response(
+        error,
+        redirect_to=url_for(
+            "game_night.view_game_night", game_night_id=request.view_args["game_night_id"]
+        ),
+    )
 
 
 @voting_bp.route("/game_night/<int:game_night_id>/nominate", methods=["POST"])
 @login_required
 @game_night_access_required
 def nominate_game(game_night_id):
-    success, message = voting_services.nominate_game(
+    message = voting_services.nominate_game(
         game_night_id, current_user.id, request.form.get("game_id")
     )
-    flash(message, "success" if success else "error")
+    flash(message, "success")
 
     context = {"game_night_id": game_night_id}
     return redirect(url_for("game_night.view_game_night", **context))
@@ -26,15 +38,14 @@ def nominate_game(game_night_id):
 @game_night_access_required
 def nominate_game_page(game_night_id):
     """Show a page where user can visually nominate a game."""
-    from app.models import GameNight, GameNominations, Player
-    from app.services import game_picker_services
+    from app.services import game_night_services, game_picker_services
 
-    game_night = db.get_or_404(GameNight, game_night_id)
+    game_night = game_night_services.get_game_night_by_id(game_night_id)
+    if not night_policy.voting_open(game_night):
+        flash("Voting is closed for this night.", "error")
+        return redirect(url_for("game_night.view_game_night", game_night_id=game_night_id))
     items, player_count = game_picker_services.picker_items(game_night, current_user.id)
-    me = Player.query.filter_by(game_night_id=game_night_id, people_id=current_user.id).first()
-    mine = (
-        me and GameNominations.query.filter_by(game_night_id=game_night_id, player_id=me.id).first()
-    )
+    mine = voting_services.my_nomination(game_night_id, current_user.id)
     my_game_id = mine.game_id if mine else None
     # Games someone else nominated can't be nominated again.
     available = [i for i in items if not i["nominated_by"] or i["game"].id == my_game_id]
@@ -67,8 +78,8 @@ def vote_game(game_night_id):
             else:
                 votes_dict[game_id] = None
 
-    success, message = voting_services.vote_game(game_night_id, current_user.id, votes_dict)
-    flash(message, "success" if success else "error")
+    message = voting_services.vote_game(game_night_id, current_user.id, votes_dict)
+    flash(message, "success")
 
     context = {"game_night_id": game_night_id}
     return redirect(url_for("game_night.view_game_night", **context))

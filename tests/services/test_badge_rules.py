@@ -214,16 +214,30 @@ def test_early_bird_not_awarded_for_nine(w):
 # --- Founding Member: among the first 5 people to play, not by row order ---
 
 
+def _all_play(w, gn, people):
+    w.play(gn, w.game(), {p: i + 1 for i, p in enumerate(people)})
+
+
 def test_founding_member_by_debut_date(w):
     first = [w.person() for _ in range(3)]
     second = [w.person() for _ in range(3)]
     late = w.person()
-    w.night(d(1800, 1, 1), first)
-    w.night(d(1800, 1, 2), second + first)
+    _all_play(w, w.night(d(1800, 1, 1), first), first)
+    _all_play(w, w.night(d(1800, 1, 2), second + first), second + first)
     n3 = w.night(d(1800, 1, 3), [late] + first)
+    _all_play(w, n3, [late] + first)
     for p in first + second:  # only 3 debuted before the second night, so all six are in
         assert bs._check_founding_member(p.id, n3.id) is True
     assert bs._check_founding_member(late.id, n3.id) is False
+
+
+def test_founding_member_needs_a_game_played_not_just_attendance(w):
+    players = [w.person() for _ in range(5)]
+    watcher = w.person()
+    gn = w.night(d(1800, 1, 1), players + [watcher])
+    _all_play(w, gn, players)
+    assert bs._check_founding_member(players[0].id, gn.id) is True
+    assert bs._check_founding_member(watcher.id, gn.id) is False
 
 
 # --- Kingslayer: ties for most wins ----------------------------------------

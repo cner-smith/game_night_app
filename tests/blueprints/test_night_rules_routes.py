@@ -59,8 +59,15 @@ def test_participant_cannot_discard_or_confirm_tracker(client, w):
     assert client.post(f"/tracker/{session.id}/discard").status_code == 403
     assert _db.session.get(TrackerSession, session.id) is not None
     assert client.get(f"/tracker/{session.id}/end").status_code == 403
-    page = client.get(f"/tracker/{session.id}").get_data(as_text=True)
-    assert "End Game" not in page and "Discard" not in page
+    page = client.get(f"/tracker/{session.id}").get_data(as_text=True).lower()
+    assert "end game" not in page and "discard" not in page
+
+
+def test_participant_finds_the_live_tracker_on_the_night_page(client, w):
+    host, ann, gn, gng, session, ph, pa = _tracked(w)
+    login(client, ann)
+    page = client.get(f"/game_night/{gn.id}").get_data(as_text=True)
+    assert f"/tracker/{session.id}" in page and "Join live tracker" in page
 
 
 def test_participant_can_still_track_scores(client, w):
@@ -259,9 +266,9 @@ def test_log_results_saves_scores_and_places(client, w):
             str(pa.id): {"user_id": str(pa.id), "score": None, "position": None},
         },
     )
-    assert resp.status_code == 302
+    assert resp.status_code == 200
     got = {r.player_id: (r.position, r.score) for r in gng.results}
-    assert got == {ph.id: (1, 12), pa.id: (None, None)}
+    assert got == {ph.id: (1, 12)}  # a blank entry means they didn't play this one
 
 
 def test_log_results_refuses_a_player_from_another_night(client, w):
