@@ -19,7 +19,6 @@ from app.models import (
     tracker_team_players,
 )
 from app.services import tracker_services
-from app.services.game_night_services import manage_attendees
 from tests.services.test_badge_rules import World
 
 
@@ -56,22 +55,26 @@ def _tracked_night(w, mode):
     return gn, a, b, session.id, pl_b
 
 
-def test_removing_attendee_with_tracker_values_deletes_them(w):
+def test_deleting_a_player_deletes_their_tracker_values(w):
     gn, a, b, sid, pl_b = _tracked_night(w, "individual")
     assert TrackerValue.query.filter_by(player_id=pl_b).count() == 1
 
-    assert manage_attendees(gn, [a.id]) is None
+    # The app refuses to remove someone mid-tracker; the FK still cleans up when a
+    # player row goes (e.g. deleting a night), so delete the row directly.
+    Player.query.filter_by(id=pl_b).delete()
     _db.session.commit()
 
     assert TrackerValue.query.filter_by(player_id=pl_b).count() == 0
     assert TrackerValue.query.filter_by(tracker_session_id=sid).count() == 1
 
 
-def test_removing_attendee_on_a_tracker_team_drops_them_from_it(w):
+def test_deleting_a_player_drops_them_from_their_tracker_team(w):
     gn, a, b, sid, pl_b = _tracked_night(w, "teams")
     team = TrackerTeam.query.filter_by(tracker_session_id=sid).one()
 
-    assert manage_attendees(gn, [a.id]) is None
+    # The app refuses to remove someone mid-tracker; the FK still cleans up when a
+    # player row goes (e.g. deleting a night), so delete the row directly.
+    Player.query.filter_by(id=pl_b).delete()
     _db.session.commit()
 
     members = _db.session.execute(

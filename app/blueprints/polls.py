@@ -65,7 +65,7 @@ def _managed_poll(poll_id: int):
     """The poll, if the current user may manage it (else 404)."""
     from app.models import Poll
 
-    poll = Poll.query.get_or_404(poll_id)
+    poll = db.get_or_404(Poll, poll_id)
     if not can_manage(poll, current_user):
         abort(404)
     return poll
