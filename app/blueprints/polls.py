@@ -26,6 +26,7 @@ from app.services.poll_services import (
     view_context,
 )
 from app.utils import host_required
+from app.utils.errors import is_htmx_fragment
 
 polls_bp = Blueprint("polls", __name__)
 
@@ -40,7 +41,7 @@ def inject_active_polls():
     # and the nav only shows it to people who can run polls.
     if (
         not has_request_context()
-        or (request.headers.get("HX-Request") and not request.headers.get("HX-Boosted"))
+        or is_htmx_fragment()
         or not current_user.is_authenticated
         or not current_user.can_start_nights
     ):
@@ -185,6 +186,11 @@ def poll_edit(poll_id: int):
     if poll.game_night and poll.game_night not in nights:
         nights.insert(0, poll.game_night)
 
+    def page(error=None):
+        return render_template(
+            "poll_edit.html", poll=poll, people=people, nights=nights, error=error
+        )
+
     if request.method == "POST":
         title = request.form.get("title", "").strip()
         description = request.form.get("description", "").strip() or None
@@ -195,13 +201,7 @@ def poll_edit(poll_id: int):
         try:
             closes_at = parse_closes_at(request.form.get("closes_at", ""))
         except ValueError:
-            return render_template(
-                "poll_edit.html",
-                poll=poll,
-                people=people,
-                nights=nights,
-                error="Invalid close date format. Please use the date picker.",
-            )
+            return page("Invalid close date format. Please use the date picker.")
 
         option_updates: dict[int, str] = {}
         for key, val in request.form.items():
@@ -213,21 +213,9 @@ def poll_edit(poll_id: int):
                     pass
 
         if not title:
-            return render_template(
-                "poll_edit.html",
-                poll=poll,
-                people=people,
-                nights=nights,
-                error="Title is required.",
-            )
+            return page("Title is required.")
         if not _night_ok(_form_night_id(), nights):
-            return render_template(
-                "poll_edit.html",
-                poll=poll,
-                people=people,
-                nights=nights,
-                error=NIGHT_NOT_LINKABLE,
-            ), 400
+            return page(NIGHT_NOT_LINKABLE), 400
 
         update_poll(
             poll,
@@ -243,7 +231,7 @@ def poll_edit(poll_id: int):
         flash("Poll updated.", "success")
         return redirect(url_for("polls.poll_list"))
 
-    return render_template("poll_edit.html", poll=poll, people=people, nights=nights)
+    return page()
 
 
 @polls_bp.route("/polls/<int:poll_id>/pick/<int:option_id>", methods=["POST"])

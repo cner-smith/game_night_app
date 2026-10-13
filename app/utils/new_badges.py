@@ -7,9 +7,8 @@ has shown (localStorage ``gn_badge_seen``) and opens the dialog for newer ones.
 
 from flask import url_for
 from flask_login import current_user
-from sqlalchemy.orm import joinedload
 
-from app.models import PersonBadge
+from app.services.badge_services import newest_awards
 
 LIMIT = 10
 
@@ -17,13 +16,6 @@ LIMIT = 10
 def newest_badges() -> list[dict]:
     if not current_user.is_authenticated:
         return []
-    awards = (
-        PersonBadge.query.filter_by(person_id=current_user.id)
-        .options(joinedload(PersonBadge.badge))
-        .order_by(PersonBadge.id.desc())
-        .limit(LIMIT)
-        .all()
-    )
     return [
         {
             "id": pb.id,
@@ -35,7 +27,7 @@ def newest_badges() -> list[dict]:
             if pb.game_night_id
             else "",
         }
-        for pb in awards
+        for pb in newest_awards(current_user.id, LIMIT)
     ]
 
 

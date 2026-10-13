@@ -915,6 +915,18 @@ def get_person_badges(person_id: int) -> list:
     )
 
 
+def newest_awards(person_id: int, limit: int) -> list:
+    """A person's most recent awards, newest first, with their badges loaded."""
+    return (
+        db.session.query(PersonBadge)
+        .filter_by(person_id=person_id)
+        .options(joinedload(PersonBadge.badge))
+        .order_by(PersonBadge.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+
 def total_badges() -> int:
     return db.session.query(func.count(Badge.id)).scalar() or 0
 

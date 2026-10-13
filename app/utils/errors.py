@@ -12,6 +12,11 @@ def wants_json() -> bool:
     return request.is_json or request.accept_mimetypes.best == "application/json"
 
 
+def is_htmx_fragment() -> bool:
+    """An HTMX request that swaps part of a page (not a boosted full page)."""
+    return bool(request.headers.get("HX-Request")) and not request.headers.get("HX-Boosted")
+
+
 def back_url(default_endpoint: str = "main.index", **values) -> str:
     """The page the request came from (same site only), else a default."""
     ref = request.referrer
@@ -26,7 +31,7 @@ def service_error_response(error: ServiceError, redirect_to: str | None = None):
     db.session.rollback()
     if wants_json():
         return jsonify({"error": error.message}), error.status
-    if request.headers.get("HX-Request") and not request.headers.get("HX-Boosted"):
+    if is_htmx_fragment():
         return error.message, error.status
     flash(error.message, "error")
     return redirect(redirect_to or back_url())

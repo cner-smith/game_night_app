@@ -6,7 +6,7 @@ All notable changes to this project will be documented here.
 
 Migrations `t7u8v9w0x1y2` through `v9w0x1y2z3a4`; the entrypoint applies them on deploy. `u8c2u3n4i5q6` merges any duplicate players, results, votes, wishlist rows and nominations before adding unique constraints (its docstring lists exactly what it keeps); `v9w0x1y2z3a4` deletes result rows with neither a score nor a place.
 
-**Before deploying:** run the read-only checks in the developer guide ("Before the first deploy of the October 2026 changes"). **After deploying:** run `flask badges recheck --dry-run` in the app container to see which existing awards the corrected rules would add or remove, then `flask badges recheck` to apply.
+**Before deploying:** run the read-only checks in the developer guide ("Before the first deploy of the October 2026 changes"). **After deploying:** run `flask badges recheck --dry-run` in the app container to see which existing awards the corrected rules would add or remove, then `flask badges recheck` to apply. It leaves Collector and Social Butterfly alone (they're judged on today's data, not a night's history).
 
 ### Deploy
 - New `game_night_scheduler` container (same image, `command: ["scheduler"]`) runs the reminder job; the web container sets `ENABLE_SCHEDULER=false` and serves with 4 gthread threads instead of one sync worker. No new env vars; `docker compose up -d --build` starts both.
@@ -29,8 +29,8 @@ Migrations `t7u8v9w0x1y2` through `v9w0x1y2z3a4`; the entrypoint applies them on
 - Sign-up stays invite-only, but by signed invite link: admins (and hosts, for guests who've only played at their nights) copy a link on the Admin page or `/invites`. A link stops working if its maker could no longer make it. Knowing someone's name is no longer enough to claim their account.
 - Closing voting leaves the RSVP poll open until the night is finalized.
 - The public recap no longer shows the night's notes.
-- Finalize lives at the bottom of "Games played" and only appears once the night has happened and a game has results.
-- Services raise `ServiceError` (flashed or returned as JSON by one handler) instead of returning `(ok, message)`; multi-step operations commit once; database queries moved out of the blueprints (see the developer guide's conventions).
+- Finalize lives at the bottom of "Games played" and only works once the night has happened and a game has results (the server refuses it otherwise). Reopening a night reopens its RSVP poll.
+- Night, tracker, voting, food, photo and RSVP-poll services raise `ServiceError` (flashed or returned as JSON by one handler) instead of returning `(ok, message)`; the rest still return tuples and are listed in the developer guide's conventions, to convert when touched. Multi-step operations commit once; database queries moved out of the blueprints.
 - Removed: four unused SQL views, the never-used temporary-password login path, and other dead code.
 
 ### Added
