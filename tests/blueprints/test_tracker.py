@@ -301,6 +301,7 @@ def test_add_field_on_active_session_returns_400(app, db, auth_tracker_client):
     )
     resp = c.post(
         f"/tracker/{session.id}/field",
+        headers={"HX-Request": "true"},  # the page posts with hx-post
         data={"type": "counter", "label": "HP", "starting_value": "10", "is_score_field": "false"},
     )
     assert resp.status_code == 400
@@ -315,6 +316,7 @@ def test_add_field_unknown_type_returns_400(app, db, auth_tracker_client):
     session = get_or_create_configuring_session(gng_id)
     resp = c.post(
         f"/tracker/{session.id}/field",
+        headers={"HX-Request": "true"},  # the page posts with hx-post
         data={
             "type": "sql_injection",
             "label": "Bad",
@@ -334,6 +336,7 @@ def test_add_field_empty_label_returns_400(app, db, auth_tracker_client):
     session = get_or_create_configuring_session(gng_id)
     resp = c.post(
         f"/tracker/{session.id}/field",
+        headers={"HX-Request": "true"},  # the page posts with hx-post
         data={"type": "counter", "label": "", "starting_value": "0", "is_score_field": "false"},
     )
     assert resp.status_code == 400
@@ -415,6 +418,7 @@ def test_value_update_cross_session_field_rejected(app, db, auth_tracker_client)
         c = auth_tracker_client["client"]
         resp = c.post(
             f"/tracker/{session_a.id}/value",
+            headers={"HX-Request": "true"},  # the page posts with hx-post
             data={
                 "field_id": str(field_b.id),
                 "entity_type": "player",

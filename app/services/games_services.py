@@ -18,7 +18,7 @@ from app.models import (
     db,
 )
 from app.services.bgg_service import BGGService
-from app.services.db_utils import add_unless_duplicate
+from app.services.db_utils import add_unless_duplicate, upsert
 
 
 def get_or_create_game(game_name, bgg_id=None):
@@ -511,7 +511,9 @@ def toggle_wishlist_vote(user_id, game_id):
         db.session.commit()
         return True, "Vote removed."
 
-    db.session.add(WishlistVote(person_id=user_id, game_id=game_id))
+    add_unless_duplicate(  # a double-click may have added it already
+        WishlistVote(person_id=user_id, game_id=game_id), "wishlist_votes_person_id_game_id_key"
+    )
     db.session.commit()
     return True, "Vote added."
 
@@ -521,14 +523,12 @@ def update_game_rating(game_id, user_id, ranking):
     if ranking is None or not (0 <= ranking <= 10):
         return False, "Invalid rating. Must be between 0 and 10."
 
-    rating = GameRatings.query.filter_by(game_id=game_id, person_id=user_id).first()
-
-    if rating:
-        rating.ranking = ranking  # Update existing
-    else:
-        rating = GameRatings(game_id=game_id, person_id=user_id, ranking=ranking)
-        db.session.add(rating)
-
+    upsert(
+        GameRatings,
+        {"game_id": game_id, "person_id": user_id, "ranking": ranking},
+        "uq_game_ratings_game_person",
+        ["ranking"],
+    )
     db.session.commit()
 
     return True, "Rating saved successfully."

@@ -9,7 +9,6 @@ import logging
 from datetime import date
 
 from sqlalchemy import func, select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from app.extensions import db
@@ -24,6 +23,7 @@ from app.models import (
     Player,
     Result,
 )
+from app.services.db_utils import add_unless_duplicate
 
 logger = logging.getLogger(__name__)
 
@@ -797,19 +797,13 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
                     )
                     continue
 
-                if earned:
-                    try:
-                        with db.session.begin_nested():
-                            db.session.add(
-                                PersonBadge(
-                                    person_id=person_id,
-                                    badge_id=badge.id,
-                                    game_night_id=night_id_to_store,
-                                )
-                            )
-                    except IntegrityError:
-                        # Already earned — unique constraint fired, skip silently
-                        continue
+                if earned:  # already held: the constraint says so, and that's fine
+                    add_unless_duplicate(
+                        PersonBadge(
+                            person_id=person_id, badge_id=badge.id, game_night_id=night_id_to_store
+                        ),
+                        "uq_person_badge",
+                    )
 
         db.session.commit()
 

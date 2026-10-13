@@ -16,6 +16,7 @@ from app.extensions import db
 from app.models import GameNightGame, TrackerSession
 from app.services import night_policy, tracker_services
 from app.services.errors import ServiceError
+from app.utils.errors import service_error_response
 
 tracker_bp = Blueprint("tracker", __name__)
 
@@ -25,11 +26,6 @@ def _get_session_or_404(session_id):
     if session is None:
         abort(404)
     return session
-
-
-def _assert_participant_or_admin(session):
-    """Abort 403 if current user is not a participant of the session's game night or admin."""
-    _assert_gng_participant_or_admin(session.game_night_game)
 
 
 def _assert_manager(session):
@@ -130,8 +126,9 @@ def launch_tracker(gng_id):
             field_order=field_order,
         )
     except ServiceError as e:
-        flash(str(e), "error")
-        return redirect(url_for("tracker.setup_tracker", gng_id=gng_id))
+        return service_error_response(
+            e, redirect_to=url_for("tracker.setup_tracker", gng_id=gng_id)
+        )
 
     return redirect(url_for("tracker.live_tracker", session_id=session_id))
 
@@ -140,7 +137,7 @@ def launch_tracker(gng_id):
 @login_required
 def live_tracker(session_id):
     session = _get_session_or_404(session_id)
-    _assert_participant_or_admin(session)
+    _assert_gng_participant_or_admin(session.game_night_game)
     gn = session.game_night_game.game_night
     if gn.final:
         return redirect(url_for("game_night.view_game_night", game_night_id=gn.id))
@@ -157,23 +154,20 @@ def live_tracker(session_id):
 @login_required
 def add_field(session_id):
     session = _get_session_or_404(session_id)
-    _assert_participant_or_admin(session)
+    _assert_gng_participant_or_admin(session.game_night_game)
     field_type = request.form.get("type", "")
     label = request.form.get("label", "")
     starting_value = _int_or_none(request.form.get("starting_value") or 0)
     if starting_value is None:
         return "Starting value must be a whole number.", 400
     is_score_field = request.form.get("is_score_field", "false").lower() == "true"
-    try:
-        field = tracker_services.add_field(
-            session_id,
-            type=field_type,
-            label=label,
-            starting_value=starting_value,
-            is_score_field=is_score_field,
-        )
-    except ServiceError as e:
-        return str(e), 400
+    field = tracker_services.add_field(
+        session_id,
+        type=field_type,
+        label=label,
+        starting_value=starting_value,
+        is_score_field=is_score_field,
+    )
     response = make_response(
         render_template("_tracker_field_row.html", field=field, session=session)
     )
@@ -186,7 +180,7 @@ def add_field(session_id):
 @login_required
 def update_value(session_id):
     session = _get_session_or_404(session_id)
-    _assert_participant_or_admin(session)
+    _assert_gng_participant_or_admin(session.game_night_game)
     field_id = _int_or_none(request.form.get("field_id"))
     entity_type = request.form.get("entity_type", "")
     entity_id = _int_or_none(request.form.get("entity_id"))
@@ -200,17 +194,14 @@ def update_value(session_id):
     value = request.form.get("value")
     if request.form.get("kind") == "checkbox":
         value = "true" if value == "true" else "false"
-    try:
-        tv = tracker_services.update_value(
-            session_id,
-            field_id,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            delta=delta,
-            value=value,
-        )
-    except ServiceError as e:
-        return str(e), 400
+    tv = tracker_services.update_value(
+        session_id,
+        field_id,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        delta=delta,
+        value=value,
+    )
     return render_template(
         "_tracker_cell.html",
         tv=tv,
@@ -236,9 +227,10 @@ def end_game(session_id):
     try:
         low_wins = request.args.get("low") == "1"
         rankings = tracker_services.compute_rankings(session_id, low_wins=low_wins)
-    except ServiceError:
-        flash("No score field configured. Add a score field before ending the game.", "error")
-        return redirect(url_for("tracker.live_tracker", session_id=session_id))
+    except ServiceError as e:
+        return service_error_response(
+            e, redirect_to=url_for("tracker.live_tracker", session_id=session_id)
+        )
     gng = session.game_night_game
     has_existing_results = bool(gng.results)
     return render_template(
@@ -268,8 +260,9 @@ def save_results(session_id):
     try:
         tracker_services.save_results(session_id, positions)
     except ServiceError as e:
-        flash(str(e), "error")
-        return redirect(url_for("tracker.end_game", session_id=session_id))
+        return service_error_response(
+            e, redirect_to=url_for("tracker.end_game", session_id=session_id)
+        )
     gn_id = session.game_night_game.game_night_id
     return redirect(
         url_for(

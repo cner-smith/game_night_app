@@ -8,6 +8,7 @@ from app.models import (
     tracker_team_players,
 )
 from app.services import night_policy
+from app.services.db_utils import add_unless_duplicate
 from app.services.errors import ServiceError
 from app.services.game_night_services import upsert_result
 
@@ -109,8 +110,9 @@ def get_or_create_configuring_session(game_night_game_id):
         mode="individual",
         status="configuring",
     )
-    db.session.add(session)
-    db.session.flush()
+    if not add_unless_duplicate(session, "tracker_sessions_game_night_game_id_key"):
+        # another tab started this game's tracker first: use that one
+        return TrackerSession.query.filter_by(game_night_game_id=game_night_game_id).one()
     # Most games just need a score, so start with one; people can add more.
     db.session.add(
         TrackerField(
@@ -314,7 +316,7 @@ def compute_rankings(session_id, low_wins=False):
         tracker_session_id=session_id, is_score_field=True
     ).first()
     if score_field is None:
-        raise ServiceError("This tracker has no score field.")
+        raise ServiceError("No score field yet. Add one before ending the game.")
 
     values = TrackerValue.query.filter_by(tracker_field_id=score_field.id).all()
     sorted_vals = sorted(values, key=lambda v: int(v.value), reverse=not low_wins)

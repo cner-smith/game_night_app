@@ -234,3 +234,31 @@ def test_finalized_night_refuses_tracker_discard_and_new_fields(w):
         tracker_services.add_field(session.id, type="counter", label="Gold")
     with pytest.raises(NightRuleError):
         tracker_services.discard_session(session.id)
+
+
+# --- writes that a double-submit can race -------------------------------------------
+
+
+def test_rating_twice_keeps_one_row_with_the_latest(w):
+    from app.models import GameRatings
+    from app.services.games_services import update_game_rating
+
+    host = w.person("Host")
+    game = w.game()
+    assert update_game_rating(game.id, host.id, 4)[0]
+    assert update_game_rating(game.id, host.id, 9)[0]
+    rows = GameRatings.query.filter_by(game_id=game.id, person_id=host.id).all()
+    assert [r.ranking for r in rows] == [9]
+
+
+def test_tracker_create_returns_the_existing_session_instead_of_crashing(w):
+    """A second tab may have started (or launched) this game's tracker first."""
+    from app.models import TrackerSession
+    from app.services import tracker_services
+
+    host, ann, gn, gng, ph, pa = _setup(w)
+    first = tracker_services.get_or_create_configuring_session(gng.id)
+    first.status = "active"
+    _db.session.commit()
+    assert tracker_services.get_or_create_configuring_session(gng.id).id == first.id
+    assert TrackerSession.query.filter_by(game_night_game_id=gng.id).count() == 1
