@@ -31,6 +31,7 @@ from app.services import food_services, night_policy, poll_services
 from app.services.admin_services import get_all_people
 from app.services.db_utils import add_unless_duplicate, upsert
 from app.services.errors import ServiceError
+from app.utils.dates import local_today
 
 logger = logging.getLogger(__name__)
 
@@ -400,6 +401,8 @@ def finalize(game_night_id):
     if game_night.final:
         db.session.rollback()
         return False, "This game night is already finalized."
+    if not night_policy.ready_to_finalize(game_night, local_today()):
+        raise night_policy.NightRuleError(night_policy.NOT_READY_MESSAGE)
     game_night.final = True
     game_night.address = None  # the night is over: don't keep where it was
     for poll in game_night.polls:
@@ -423,6 +426,11 @@ def unfinalize(game_night_id):
         db.session.rollback()
         return False, "This game night isn't finalized."
     game_night.final = False
+    for (
+        poll
+    ) in game_night.polls:  # undo what finalize closed; voting polls follow the voting switch
+        if poll.availability or not game_night.closed:
+            poll.closed = False
     PersonBadge.query.filter_by(game_night_id=game_night_id).delete()
     db.session.commit()
     return True, "Game night reopened. Its badges were removed until it's finalized again."

@@ -2,6 +2,7 @@
 result rows, out-of-range numbers, lost flashes and anchors, pages that only
 refused on submit, and the RSVP poll closing with voting."""
 
+import datetime
 import uuid
 
 import pytest
@@ -119,6 +120,41 @@ def test_closing_voting_says_so_and_keeps_the_rsvp_poll_open(client, w):
     assert "Voting reopened." in resp.get_data(as_text=True)
 
 
+def test_finalize_closes_the_rsvp_poll_and_reopen_opens_it(client, w):
+    host, ann, gn, gng, ph, pa = _setup(w, date=datetime.date(2024, 1, 1))
+    _db.session.add(Result(game_night_game_id=gng.id, player_id=ph.id, position=1))
+    rsvp = Poll(
+        title="RSVP",
+        created_by=host.id,
+        token=uuid.uuid4().hex,
+        game_night_id=gn.id,
+        availability=True,
+    )
+    _db.session.add(rsvp)
+    _db.session.commit()
+    login(client, host)
+    client.post(f"/game_night/{gn.id}/finalize")
+    _db.session.refresh(rsvp)
+    assert rsvp.closed is True
+    client.post(f"/game_night/{gn.id}/unfinalize")
+    _db.session.refresh(rsvp)
+    assert rsvp.closed is False
+
+
+@pytest.mark.parametrize("when", ["future", "no_results"])
+def test_finalize_refuses_a_night_that_isnt_ready(client, w, when):
+    date = datetime.date(2099, 1, 1) if when == "future" else datetime.date(2024, 1, 1)
+    host, ann, gn, gng, ph, pa = _setup(w, date=date)
+    if when == "future":
+        _db.session.add(Result(game_night_game_id=gng.id, player_id=ph.id, position=1))
+        _db.session.commit()
+    login(client, host)
+    resp = client.post(f"/game_night/{gn.id}/finalize", follow_redirects=True)
+    assert "once it has happened" in resp.get_data(as_text=True)
+    _db.session.refresh(gn)
+    assert gn.final is False
+
+
 # --- pages that can't be used say so up front ---------------------------------------
 
 
@@ -181,3 +217,20 @@ def test_background_wishlist_toggle_answers_204(client, w):
     assert (
         client.post(f"/wishlist/toggle/{game.id}", headers={"X-Background": "1"}).status_code == 204
     )
+
+
+# --- the tracker is locked with the rest of a finalized night ------------------------
+
+
+def test_finalized_night_refuses_tracker_discard_and_new_fields(w):
+    from app.services import tracker_services
+    from app.services.night_policy import NightRuleError
+
+    host, ann, gn, gng, ph, pa = _setup(w)
+    session = tracker_services.get_or_create_configuring_session(gng.id)
+    gn.final = True
+    _db.session.commit()
+    with pytest.raises(NightRuleError):
+        tracker_services.add_field(session.id, type="counter", label="Gold")
+    with pytest.raises(NightRuleError):
+        tracker_services.discard_session(session.id)

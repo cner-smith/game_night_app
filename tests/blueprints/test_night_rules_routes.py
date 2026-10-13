@@ -1,6 +1,8 @@
 """Night rules through the routes: who can save official results, and what
 malformed input gets back."""
 
+import datetime
+
 import pytest
 
 from app.extensions import db as _db
@@ -137,7 +139,7 @@ def test_out_of_range_places_are_refused(client, w, bad):
 
 def _played_night(w):
     host, ann = w.person("Host"), w.person("Ann")
-    gn = w.night(host, ann, host=host, address="1 Main St")
+    gn = w.night(host, ann, host=host, address="1 Main St", date=datetime.date(2024, 1, 1))
     w.play(gn, positions={host: 1, ann: 2})
     return host, ann, gn
 

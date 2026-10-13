@@ -11,6 +11,7 @@ from app.services.errors import ServiceError
 FINAL_MESSAGE = "This game night is finalized. Reopen it to make changes."
 VOTING_CLOSED_MESSAGE = "Voting is closed for this game night."
 MANAGER_MESSAGE = "Only this night's host or an admin can do that."
+NOT_READY_MESSAGE = "A night can be finalized once it has happened and a game has results."
 
 
 class NightRuleError(ServiceError, ValueError):
