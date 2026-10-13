@@ -312,3 +312,24 @@ def test_db_error_in_one_check_keeps_other_awards(w, monkeypatch):
 
     hat_trick = Badge.query.filter_by(key="hat_trick").one()
     assert PersonBadge.query.filter_by(person_id=me.id, badge_id=hat_trick.id).count() == 1
+
+
+def test_one_failed_award_keeps_the_nights_other_awards(w, monkeypatch):
+    me, other = w.person(), w.person()
+    gn = w.night(d(1850), [me, other])
+    for r in range(3):
+        w.play(gn, w.game(), {me: 1, other: 2}, round=r)
+    _db.session.commit()
+    first_blood = Badge.query.filter_by(key="first_blood").one()
+    real_add = bs.add_unless_duplicate
+
+    def flaky(obj, *constraints):
+        if obj.badge_id == first_blood.id:
+            raise RuntimeError("boom")
+        return real_add(obj, *constraints)
+
+    monkeypatch.setattr(bs, "add_unless_duplicate", flaky)
+    bs.evaluate_badges_for_night(gn.id)
+
+    hat_trick = Badge.query.filter_by(key="hat_trick").one()
+    assert PersonBadge.query.filter_by(person_id=me.id, badge_id=hat_trick.id).count() == 1

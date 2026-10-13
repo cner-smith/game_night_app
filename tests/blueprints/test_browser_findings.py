@@ -130,7 +130,11 @@ def test_finalize_closes_the_rsvp_poll_and_reopen_opens_it(client, w):
         game_night_id=gn.id,
         availability=True,
     )
-    _db.session.add(rsvp)
+    closed_by_hand = Poll(
+        title="Snacks?", created_by=host.id, token=uuid.uuid4().hex, game_night_id=gn.id
+    )
+    closed_by_hand.closed = True
+    _db.session.add_all([rsvp, closed_by_hand])
     _db.session.commit()
     login(client, host)
     client.post(f"/game_night/{gn.id}/finalize")
@@ -138,7 +142,9 @@ def test_finalize_closes_the_rsvp_poll_and_reopen_opens_it(client, w):
     assert rsvp.closed is True
     client.post(f"/game_night/{gn.id}/unfinalize")
     _db.session.refresh(rsvp)
+    _db.session.refresh(closed_by_hand)
     assert rsvp.closed is False
+    assert closed_by_hand.closed is True
 
 
 @pytest.mark.parametrize("when", ["future", "no_results"])

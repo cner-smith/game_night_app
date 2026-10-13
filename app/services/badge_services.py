@@ -797,13 +797,17 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
                     )
                     continue
 
-                if earned:  # already held: the constraint says so, and that's fine
+                if not earned:
+                    continue
+                try:  # already held: the constraint says so, and that's fine
                     add_unless_duplicate(
                         PersonBadge(
                             person_id=person_id, badge_id=badge.id, game_night_id=night_id_to_store
                         ),
                         "uq_person_badge",
                     )
+                except Exception:  # one bad award mustn't undo the night's others
+                    logger.exception("Awarding %s to person %s failed", badge_key, person_id)
 
         db.session.commit()
 

@@ -402,7 +402,7 @@ The entrypoint automatically runs `flask db upgrade` before starting gunicorn, s
 Run these against production first (read-only):
 
 ```sql
--- what migration u8c2 merges or deletes (see its docstring for which row it keeps):
+-- the main things migration u8c2 merges or deletes (its docstring lists every step and which row it keeps):
 -- people on a night twice
 SELECT game_night_id, people_id, count(*) FROM players GROUP BY 1, 2 HAVING count(*) > 1;
 -- more than one result for a player in one game
@@ -411,6 +411,10 @@ SELECT game_night_game_id, player_id, count(*) FROM results GROUP BY 1, 2 HAVING
 SELECT player_id, game_id, count(*) FROM game_votes GROUP BY 1, 2 HAVING count(*) > 1;
 -- a game nominated twice on a night (the later nominations are dropped, which can change The Oracle)
 SELECT game_night_id, game_id, count(*) FROM game_nominations GROUP BY 1, 2 HAVING count(*) > 1;
+-- votes for a game that isn't nominated that night (deleted outright)
+SELECT gv.id FROM game_votes gv
+ WHERE NOT EXISTS (SELECT 1 FROM game_nominations n
+                    WHERE n.game_night_id = gv.game_night_id AND n.game_id = gv.game_id);
 -- the same wishlist entry twice
 SELECT person_id, game_id, count(*) FROM wishlist GROUP BY 1, 2 HAVING count(*) > 1;
 

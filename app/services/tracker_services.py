@@ -112,7 +112,10 @@ def get_or_create_configuring_session(game_night_game_id):
     )
     if not add_unless_duplicate(session, "tracker_sessions_game_night_game_id_key"):
         # another tab started this game's tracker first: use that one
-        return TrackerSession.query.filter_by(game_night_game_id=game_night_game_id).one()
+        existing = TrackerSession.query.filter_by(game_night_game_id=game_night_game_id).first()
+        if existing is None:  # ...and it was discarded again in between
+            raise ServiceError("Someone else just changed this tracker. Try again.")
+        return existing
     # Most games just need a score, so start with one; people can add more.
     db.session.add(
         TrackerField(

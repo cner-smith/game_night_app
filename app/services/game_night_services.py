@@ -426,10 +426,9 @@ def unfinalize(game_night_id):
         db.session.rollback()
         return False, "This game night isn't finalized."
     game_night.final = False
-    for (
-        poll
-    ) in game_night.polls:  # undo what finalize closed; voting polls follow the voting switch
-        if poll.availability or not game_night.closed:
+    # The RSVP poll is open until the night is final; other polls stay as they are.
+    for poll in game_night.polls:
+        if poll.availability:
             poll.closed = False
     PersonBadge.query.filter_by(game_night_id=game_night_id).delete()
     db.session.commit()
