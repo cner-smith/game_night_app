@@ -818,6 +818,12 @@ def evaluate_badges_for_night(game_night_id: int) -> None:
         logger.exception("Badge evaluation failed for game night %s", game_night_id)
 
 
+# Judged on today's data (games owned now, who's active now), not on a night's
+# history: re-judging old nights would date them wrongly or take back awards that
+# were right when earned. recheck leaves them alone; finalizing still awards them.
+_JUDGED_ON_TODAY = {"collector", "social_butterfly"}
+
+
 def recheck_badges(apply: bool) -> list[dict]:
     """Re-judge every finalized night, oldest first, with the current rules.
 
@@ -825,16 +831,15 @@ def recheck_badges(apply: bool) -> list[dict]:
     earned each one, then compares with what's stored: awards that no longer
     qualify are removed, missing ones are added (dated to that first night),
     and awards that still qualify are left exactly as they are. Badges with
-    no checker are ignored. Unlike finalizing a night, a checker error is
+    no checker, and those in _JUDGED_ON_TODAY, are ignored. Unlike finalizing a night, a checker error is
     raised, so a failing check can never read as "doesn't qualify" and
     remove an award. With apply=False nothing is written.
 
     Returns one entry per badge with changes, in badge order:
     {"badge": name, "added": [(person name, night date)], "removed": [person name]}.
     """
-    badges = {
-        b.key: b for b in db.session.query(Badge).filter(Badge.key.in_(_BADGE_REGISTRY)).all()
-    }
+    keys = set(_BADGE_REGISTRY) - _JUDGED_ON_TODAY
+    badges = {b.key: b for b in db.session.query(Badge).filter(Badge.key.in_(keys)).all()}
     nights = (
         db.session.query(GameNight)
         .filter(GameNight.final.is_(True))

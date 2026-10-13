@@ -85,3 +85,16 @@ def test_recheck_command_prints_names(app, w):
     assert "- Bob T" in result.output
     assert "+ Ann T (1820-03-01)" in result.output
     assert "Dry run" in result.output
+
+
+def test_recheck_leaves_badges_judged_on_today_alone(w):
+    """Collector counts games owned now: someone who's since sold games keeps it,
+    and recheck doesn't back-date it to a night before they owned them."""
+    ann, bob, gn, _kept = _scenario(w)
+    _award(bob, "collector", gn)  # Bob owns nothing today
+    _db.session.commit()
+
+    bs.recheck_badges(apply=True)
+
+    assert "collector" in _held(bob)
+    assert "social_butterfly" not in _held(ann)  # would qualify, but recheck doesn't judge it

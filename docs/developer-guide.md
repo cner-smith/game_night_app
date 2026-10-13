@@ -332,56 +332,38 @@ A night can have an optional `address`. Only people who can open the night see i
 
 26 badges are automatically evaluated when a game night is **finalized** (marked as complete). The evaluation runs in `app/services/badge_services.py`.
 
-After changing a badge rule, run `flask badges recheck --dry-run` to see which awards would be added or removed when every finalized night is re-judged in date order, then `flask badges recheck` to save those changes in one transaction. Awards that still qualify are left as they are.
+After changing a badge rule, run `flask badges recheck --dry-run` to see which awards would be added or removed when every finalized night is re-judged in date order, then `flask badges recheck` to save those changes in one transaction. Awards that still qualify are left as they are. Collector and Social Butterfly are skipped: they're judged on today's data (games owned now, who's active now), not on the night's history, so re-judging old nights would date or remove them wrongly; finalizing a night still awards them.
 
-| Badge | Trigger |
-|-------|---------|
-| First Blood | Win your first game |
-| Hat Trick | Win 3 games in one night |
-| Bench Warmer | Attend 3+ nights without a win |
-| Jack of All Trades | Play 5+ different games |
-| The Diplomat | Play in every game of a night |
-| Opening Night | Host the first game night |
-| Redemption Arc | Win after 2+ losses to the same person |
-| The Rematch | Play the same game again after losing |
-| Dark Horse | Win with the longest losing streak |
-| Veteran | Attend 10 game nights |
-| Century Club | Attend 100 game nights |
-| Variety Pack | Play 25 unique games total |
-| Night Owl | Attend 5+ game nights that go past midnight |
-| Gracious Host | Host 5+ game nights |
-| Collector | Own 10+ games |
-| Early Bird | Be the first to RSVP to 3 game nights |
-| Founding Member | Attend one of the first 3 game nights |
-| Winning Streak | Win 3 games in a row (across nights) |
-| The Closer | Win the last game of a night |
-| Nemesis | Lose to the same person 3+ times |
-| Kingslayer | Beat the person with the most wins |
-| Upset Special | Win despite lowest win rate |
-| Grudge Match | Beat your nemesis |
-| Most Wins | Most wins in a single game night |
-| Social Butterfly | Play with 5+ different people in one night |
-| The Oracle | Correctly predict the game night winner |
+| Badge | Rule |
+|-------|------|
+| First Blood | First time winning any game at a game night |
+| Hat Trick | Win 3 games in a single game night session |
+| Veteran | Attend 25 game nights total |
+| Kingslayer | Beat the person with the most all-time wins in a head-to-head game |
+| Collector | Own 10+ games in the group library |
+| Variety Pack | Play 10 different unique games across any number of nights |
+| Nemesis | One specific person has beaten you 5+ times in the same game |
+| Redemption Arc | Win a game you have previously lost 3+ times |
+| Night Owl | Attend 5 game nights in a single calendar month |
+| Gracious Host | Attend every game night in a calendar year (awarded once the year is over) |
+| Jack of All Trades | Finish in the top half in every game played at a single game night |
+| Upset Special | Beat a player whose win rate against you was 80% or more (min 5 games) |
+| Bench Warmer | Attend a game night but finish last in every game you played |
+| Grudge Match | Play the same game against the same opponent 10+ times |
+| The Closer | Win the last game at 5 consecutive game nights you attended |
+| Opening Night | Play in the very first game night ever recorded |
+| Winning Streak | Win at least one game at 3 consecutive game nights you attended |
+| The Diplomat | Play a game night where every game ends in a tie or shared first place |
+| Host with the Most | Host 10 game nights |
+| The Rematch | Play the same game at back-to-back consecutive game nights you attended |
+| Century Club | Play in 100 total game night games across all nights |
+| Dark Horse | Within one game night: finish last in your first 3 games then win the last |
+| Social Butterfly | Play at least one game with everyone else who has played |
+| The Oracle | Nominate a game, have it played, and win it — 5 times |
+| Founding Member | Be one of the first 5 people to ever play a game night |
+| Most Wins | Once hold the record for most all-time wins across the group |
 
 Badges are displayed on the **user stats page** (`/user_stats`) and on each game night's **recap page** (`/game_night/<id>/recap`).
-
-To retroactively evaluate badges on an existing database (e.g., after first deployment):
-
-```bash
-sudo docker compose -f docker-compose.dev.yml exec app flask shell
-```
-
-```python
-from app.models import GameNight
-from app.services.badge_services import evaluate_badges_for_night
-from app import db
-
-nights = GameNight.query.filter_by(final=True).all()
-for night in nights:
-    evaluate_badges_for_night(night.id)
-db.session.commit()
-print(f"Evaluated {len(nights)} nights")
-```
 
 ### Game Night Recap
 
@@ -420,13 +402,38 @@ The entrypoint automatically runs `flask db upgrade` before starting gunicorn, s
 Run these against production first (read-only):
 
 ```sql
--- people on a night twice: migration u8c2 merges them (see its docstring)
+-- what migration u8c2 merges or deletes (see its docstring for which row it keeps):
+-- people on a night twice
 SELECT game_night_id, people_id, count(*) FROM players GROUP BY 1, 2 HAVING count(*) > 1;
--- old temporary passwords still set
+-- more than one result for a player in one game
+SELECT game_night_game_id, player_id, count(*) FROM results GROUP BY 1, 2 HAVING count(*) > 1;
+-- the same vote twice
+SELECT player_id, game_id, count(*) FROM game_votes GROUP BY 1, 2 HAVING count(*) > 1;
+-- a game nominated twice on a night (the later nominations are dropped, which can change The Oracle)
+SELECT game_night_id, game_id, count(*) FROM game_nominations GROUP BY 1, 2 HAVING count(*) > 1;
+-- the same wishlist entry twice
+SELECT person_id, game_id, count(*) FROM wishlist GROUP BY 1, 2 HAVING count(*) > 1;
+
+-- result rows with neither score nor place: migration v9w0 deletes them
+SELECT count(*) FROM results WHERE score IS NULL AND position IS NULL;
+
+-- anything built on the four views migration u8c3 drops (it fails rather than cascade)
+SELECT DISTINCT dependent.relname FROM pg_depend d
+  JOIN pg_rewrite r ON r.oid = d.objid
+  JOIN pg_class dependent ON dependent.oid = r.ev_class
+  JOIN pg_class source ON source.oid = d.refobjid
+ WHERE source.relname IN ('user_recent_future_game_nights', 'admin_recent_future_game_nights',
+                          'user_game_nights_list', 'admin_game_nights_list')
+   AND dependent.relname NOT IN ('user_recent_future_game_nights', 'admin_recent_future_game_nights',
+                                 'user_game_nights_list', 'admin_game_nights_list');
+
+-- old temporary passwords still set (they can no longer sign in; those people use Forgot password?)
 SELECT count(*) FROM people WHERE temp_pass;
 ```
 
-and `\d players`, `\d wishlist`, `\d ownedby`, `\d game_nominations` in psql: if the brownfield database has its own unique indexes on those tables under other names, drop them in a migration so double-submits are recognised by the constraint names in `app/services/db_utils.py`. After deploying, `flask badges recheck --dry-run`.
+Take a backup first (`pg_dump`): the duplicate and blank-row deletions can't be undone by a downgrade.
+
+and `\d players`, `\d wishlist`, `\d ownedby`, `\d game_nominations` in psql: if the brownfield database has its own unique indexes on those tables under other names, drop them in a migration so double-submits are recognised by the constraint names in `app/services/db_utils.py`. After deploying all four parts (not before: the blank-row cleanup only arrives in the last one, and a recheck before it would count blank rows as games played), run `flask badges recheck --dry-run`, read the list, then `flask badges recheck`.
 
 ### Containers: web and scheduler
 
