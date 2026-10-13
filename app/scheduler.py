@@ -15,6 +15,12 @@ import threading
 def main() -> None:
     os.environ["ENABLE_SCHEDULER"] = "true"  # this process exists to run it
 
+    # As PID 1 in a container, SIGTERM is ignored unless we handle it. Set this up
+    # first so a stop that arrives while the app is starting still exits cleanly.
+    stop = threading.Event()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: stop.set())
+
     from app import create_app
     from app.extensions import scheduler
 
@@ -22,10 +28,6 @@ def main() -> None:
     for job in scheduler.get_jobs():
         logging.info("Scheduler running: %s, next run %s", job.id, job.next_run_time)
 
-    # As PID 1 in a container, SIGTERM is ignored unless we handle it.
-    stop = threading.Event()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        signal.signal(sig, lambda *_: stop.set())
     stop.wait()
     logging.info("Scheduler stopping")
     scheduler.shutdown()
